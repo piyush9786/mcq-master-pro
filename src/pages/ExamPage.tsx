@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Timer, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import { Timer, ArrowRight, ArrowLeft, SkipForward, CheckCircle2, XCircle } from 'lucide-react';
 
 type Phase = 'setup' | 'quiz' | 'result';
 
@@ -24,6 +24,7 @@ export default function ExamPage() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [session, setSession] = useState<TestSession | null>(null);
   const [showReview, setShowReview] = useState(false);
+  const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const startTime = useRef(0);
   const timerRef = useRef<NodeJS.Timeout>();
 
@@ -35,13 +36,13 @@ export default function ExamPage() {
     setQuestions(selected);
     setCurrentIdx(0);
     setAnswers({});
+    setFlagged(new Set());
     const totalTime = selected.length * timePerQ;
     setTimeLeft(totalTime);
     startTime.current = Date.now();
     setPhase('quiz');
   };
 
-  // Timer
   useEffect(() => {
     if (phase !== 'quiz') return;
     timerRef.current = setInterval(() => {
@@ -58,11 +59,23 @@ export default function ExamPage() {
     setAnswers(prev => ({ ...prev, [q.id]: optionIdx }));
   };
 
+  const prevQuestion = () => {
+    if (currentIdx > 0) setCurrentIdx(prev => prev - 1);
+  };
+
   const nextQuestion = () => {
     if (currentIdx < questions.length - 1) {
       setCurrentIdx(prev => prev + 1);
     } else {
       finishExam();
+    }
+  };
+
+  const skipAndFlag = () => {
+    const q = questions[currentIdx];
+    setFlagged(prev => new Set(prev).add(q.id));
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(prev => prev + 1);
     }
   };
 
@@ -94,7 +107,6 @@ export default function ExamPage() {
     setPhase('result');
   };
 
-  // Keyboard
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (phase !== 'quiz') return;
@@ -102,6 +114,8 @@ export default function ExamPage() {
       const num = parseInt(e.key);
       if (num >= 1 && num <= q.options.length) selectAnswer(num - 1);
       if (e.key === 'Enter') nextQuestion();
+      if (e.key === 'ArrowLeft') prevQuestion();
+      if (e.key === 's' || e.key === 'S') skipAndFlag();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -216,22 +230,54 @@ export default function ExamPage() {
     );
   }
 
-  // Quiz
+  // Quiz phase
   const q = questions[currentIdx];
   const progress = ((currentIdx + 1) / questions.length) * 100;
+  const answeredCount = Object.keys(answers).length;
+  const unansweredCount = questions.length - answeredCount;
+  const flaggedCount = flagged.size;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
         <Badge variant="secondary">{q.subject} • {q.level}</Badge>
-        <div className="flex items-center gap-2">
-          <Timer className={`h-4 w-4 ${timeLeft < 30 ? 'text-destructive animate-pulse' : 'text-muted-foreground'}`} />
-          <span className={`text-sm font-mono font-medium ${timeLeft < 30 ? 'text-destructive' : ''}`}>{formatTime(timeLeft)}</span>
+        <div className="flex items-center gap-4">
+          <div className="text-xs text-muted-foreground space-x-2">
+            <span>Answered: {answeredCount}/{questions.length}</span>
+            {flaggedCount > 0 && <span className="text-warning">• Flagged: {flaggedCount}</span>}
+          </div>
+          <div className="flex items-center gap-2">
+            <Timer className={`h-4 w-4 ${timeLeft < 30 ? 'text-destructive animate-pulse' : 'text-muted-foreground'}`} />
+            <span className={`text-sm font-mono font-medium ${timeLeft < 30 ? 'text-destructive' : ''}`}>{formatTime(timeLeft)}</span>
+          </div>
         </div>
       </div>
       <div className="flex items-center gap-2">
         <Progress value={progress} className="h-1.5 flex-1" />
         <span className="text-xs text-muted-foreground">{currentIdx + 1}/{questions.length}</span>
+      </div>
+
+      {/* Question number grid */}
+      <div className="flex flex-wrap gap-1.5">
+        {questions.map((qi, i) => {
+          const isAnswered = answers[qi.id] !== undefined;
+          const isFlagged = flagged.has(qi.id);
+          const isCurrent = i === currentIdx;
+          return (
+            <button
+              key={qi.id}
+              onClick={() => setCurrentIdx(i)}
+              className={`h-7 w-7 rounded text-xs font-medium transition-all border ${
+                isCurrent ? 'border-primary bg-primary text-primary-foreground' :
+                isFlagged ? 'border-warning bg-warning/10 text-warning' :
+                isAnswered ? 'border-success/50 bg-success/10 text-success' :
+                'border-border text-muted-foreground hover:border-primary'
+              }`}
+            >
+              {i + 1}
+            </button>
+          );
+        })}
       </div>
 
       <Card className="glass-card">
@@ -252,14 +298,25 @@ export default function ExamPage() {
               );
             })}
           </div>
-          <div className="mt-6 flex justify-between">
-            <Button variant="outline" onClick={finishExam}>Submit Exam</Button>
-            <Button onClick={nextQuestion}>
-              {currentIdx < questions.length - 1 ? <>Next <ArrowRight className="h-4 w-4 ml-1" /></> : 'Finish'}
-            </Button>
+          <div className="mt-6 flex items-center justify-between">
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={prevQuestion} disabled={currentIdx === 0}>
+                <ArrowLeft className="h-4 w-4 mr-1" /> Previous
+              </Button>
+              <Button variant="outline" onClick={skipAndFlag} disabled={currentIdx === questions.length - 1} title="Skip & Review Later">
+                <SkipForward className="h-4 w-4 mr-1" /> Skip
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={finishExam}>Submit Exam</Button>
+              <Button onClick={nextQuestion}>
+                {currentIdx < questions.length - 1 ? <>Next <ArrowRight className="h-4 w-4 ml-1" /></> : 'Finish'}
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
+      <p className="text-xs text-center text-muted-foreground">Keys: 1-{q.options.length} answer • ← prev • S skip • Enter next</p>
     </div>
   );
 }

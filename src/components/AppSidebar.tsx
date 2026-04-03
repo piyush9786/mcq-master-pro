@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, BookOpen, Timer, BarChart3, BookX, ArrowUpDown, Sun, Moon, Zap } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Timer, BarChart3, BookX, ArrowUpDown, Sun, Moon, Zap, Library } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 const items = [

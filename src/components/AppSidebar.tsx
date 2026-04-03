@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, BookOpen, Timer, BarChart3, BookX, ArrowUpDown, Sun, Moon, Zap } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Timer, BarChart3, BookX, ArrowUpDown, Sun, Moon, Zap, Library } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 const items = [
@@ -20,6 +20,7 @@ const items = [
   { title: 'Exam', url: '/exam', icon: Timer },
   { title: 'Results', url: '/results', icon: BarChart3 },
   { title: 'Wrong Questions', url: '/wrong-questions', icon: BookX },
+  { title: 'Subjects', url: '/subjects', icon: Library },
   { title: 'Import/Export', url: '/import-export', icon: ArrowUpDown },
 ];
 

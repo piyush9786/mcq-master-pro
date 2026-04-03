@@ -9,6 +9,7 @@ import ExamPage from "./pages/ExamPage";
 import ResultsPage from "./pages/ResultsPage";
 import WrongQuestionsPage from "./pages/WrongQuestionsPage";
 import ImportExportPage from "./pages/ImportExportPage";
+import SubjectsPage from "./pages/SubjectsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/exam" element={<ExamPage />} />
             <Route path="/results" element={<ResultsPage />} />
             <Route path="/wrong-questions" element={<WrongQuestionsPage />} />
+            <Route path="/subjects" element={<SubjectsPage />} />
             <Route path="/import-export" element={<ImportExportPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

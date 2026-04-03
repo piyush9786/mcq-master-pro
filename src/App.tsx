@@ -26,6 +26,7 @@ const App = () => (
             <Route path="/exam" element={<ExamPage />} />
             <Route path="/results" element={<ResultsPage />} />
             <Route path="/wrong-questions" element={<WrongQuestionsPage />} />
+            <Route path="/subjects" element={<SubjectsPage />} />
             <Route path="/import-export" element={<ImportExportPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -20,6 +20,7 @@ const items = [
   { title: 'Exam', url: '/exam', icon: Timer },
   { title: 'Results', url: '/results', icon: BarChart3 },
   { title: 'Wrong Questions', url: '/wrong-questions', icon: BookX },
+  { title: 'Subjects', url: '/subjects', icon: Library },
   { title: 'Import/Export', url: '/import-export', icon: ArrowUpDown },
 ];
 

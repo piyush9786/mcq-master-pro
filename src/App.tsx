@@ -9,6 +9,7 @@ import ExamPage from "./pages/ExamPage";
 import ResultsPage from "./pages/ResultsPage";
 import WrongQuestionsPage from "./pages/WrongQuestionsPage";
 import ImportExportPage from "./pages/ImportExportPage";
+import SubjectsPage from "./pages/SubjectsPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

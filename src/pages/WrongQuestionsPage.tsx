@@ -160,7 +160,7 @@ export default function WrongQuestionsPage() {
                           </div>
                         ))}
                       </div>
-                      <p className="text-sm text-muted-foreground italic p-2 bg-muted/50 rounded">{q.explanation}</p>
+                      <p className="text-sm text-muted-foreground italic p-2 bg-muted/50 rounded"><FormattedText text={q.explanation} /></p>
                     </div>
                   )}
                 </CardContent>

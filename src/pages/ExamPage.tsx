@@ -294,7 +294,7 @@ export default function ExamPage() {
                   onClick={() => selectAnswer(i)}
                 >
                   <span className="h-7 w-7 rounded-full border flex items-center justify-center text-xs font-medium shrink-0">{i + 1}</span>
-                  <span className="flex-1">{opt}</span>
+                  <span className="flex-1"><FormattedText text={opt} /></span>
                 </button>
               );
             })}

@@ -253,7 +253,7 @@ export default function PracticePage() {
           {showExplanation && (
             <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-border animate-fade-in">
               <p className="text-sm font-medium mb-1">Explanation</p>
-              <p className="text-sm text-muted-foreground">{q.explanation}</p>
+              <p className="text-sm text-muted-foreground"><FormattedText text={q.explanation} /></p>
             </div>
           )}
 

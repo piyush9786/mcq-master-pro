@@ -223,7 +223,7 @@ export default function PracticePage() {
 
       <Card className="glass-card">
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-6">{q.question}</h2>
+          <h2 className="text-lg font-semibold mb-6"><FormattedText text={q.question} /></h2>
           <div className="space-y-3">
             {q.options.map((opt, i) => {
               const isSelected = userAnswer === i;

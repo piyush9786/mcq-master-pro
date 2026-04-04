@@ -16,7 +16,7 @@ interface FormattedTextProps {
  */
 export default function FormattedText({ text, className = '' }: FormattedTextProps) {
   const html = useMemo(() => renderFormatted(text), [text]);
-  return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+  return <div className={`inline ${className}`} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function renderKatex(latex: string, displayMode: boolean): string {

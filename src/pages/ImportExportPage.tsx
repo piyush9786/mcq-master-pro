@@ -60,10 +60,29 @@ export default function ImportExportPage() {
         setImportCount(null);
         return;
       }
-      const added = addQuestions(result.questions);
+
+      const { added, duplicates } = addQuestions(result.questions);
+
+      if (added === 0 && duplicates.length > 0) {
+        setImportCount(null);
+        setErrors([
+          `All ${duplicates.length} questions were skipped because these IDs already exist. Try unique IDs or delete the old questions first.`,
+          `Duplicate IDs: ${duplicates.slice(0, 10).join(', ')}${duplicates.length > 10 ? '...' : ''}`,
+        ]);
+        toast({ title: 'No new questions imported', description: 'All question IDs already exist.' });
+        return;
+      }
+
       setImportCount(added);
-      setErrors([]);
-      toast({ title: `Imported ${added} new questions!` });
+      setErrors(
+        duplicates.length > 0
+          ? [`${duplicates.length} questions were skipped because their IDs already exist.`]
+          : []
+      );
+      toast({
+        title: `Imported ${added} new questions!`,
+        description: duplicates.length > 0 ? `${duplicates.length} duplicate IDs were skipped.` : undefined,
+      });
     } catch {
       setErrors(['Invalid JSON format']);
       setImportCount(null);

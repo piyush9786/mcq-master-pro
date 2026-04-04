@@ -38,7 +38,7 @@ export default function PracticePage() {
     setPhase('quiz');
   };
 
-  const selectAnswer = (optionIdx: number) => {
+  const selectAnswer = useCallback((optionIdx: number) => {
     if (answers[questions[currentIdx].id] !== undefined) return;
     const q = questions[currentIdx];
     setAnswers(prev => ({ ...prev, [q.id]: optionIdx }));
@@ -49,18 +49,18 @@ export default function PracticePage() {
     } else {
       markCorrected(q.id);
     }
-  };
+  }, [answers, questions, currentIdx]);
 
-  const nextQuestion = () => {
+  const nextQuestion = useCallback(() => {
     if (currentIdx < questions.length - 1) {
       setCurrentIdx(prev => prev + 1);
       setShowExplanation(false);
     } else {
       finishPractice();
     }
-  };
+  }, [currentIdx, questions.length, finishPractice]);
 
-  const finishPractice = () => {
+  const finishPractice = useCallback(() => {
     const score = questions.filter(q => answers[q.id] === q.answer).length;
     const s: TestSession = {
       id: crypto.randomUUID(),
@@ -80,7 +80,7 @@ export default function PracticePage() {
     updateStats(s, getQuestions());
     setSession(s);
     setPhase('result');
-  };
+  }, [questions, answers, subject, level]);
 
   const retryWrong = () => {
     const wrong = questions.filter(q => answers[q.id] !== q.answer);
@@ -106,7 +106,7 @@ export default function PracticePage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [phase, currentIdx, showExplanation, answers, questions]);
+  }, [phase, currentIdx, showExplanation, answers, questions, selectAnswer, nextQuestion]);
 
   if (phase === 'setup') {
     return (

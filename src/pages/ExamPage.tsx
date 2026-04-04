@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getSubjects, selectQuestions, saveSession, addWrongQuestion, updateStats, getQuestions, addRecentIds } from '@/lib/storage';
 import { Question, TestSession, Difficulty } from '@/types/mcq';
 import { Card, CardContent } from '@/components/ui/card';
@@ -34,8 +34,10 @@ export default function ExamPage() {
   const startExam = () => {
     const selected = selectQuestions(count, subject, level);
     if (selected.length === 0) return;
+    questionsRef.current = selected;
     setQuestions(selected);
     setCurrentIdx(0);
+    answersRef.current = {};
     setAnswers({});
     setFlagged(new Set());
     const totalTime = selected.length * timePerQ;
@@ -53,39 +55,46 @@ export default function ExamPage() {
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, [phase]);
+  }, [phase, finishExam]);
 
-  const selectAnswer = (optionIdx: number) => {
+  const selectAnswer = useCallback((optionIdx: number) => {
     const q = questions[currentIdx];
+    answersRef.current = { ...answersRef.current, [q.id]: optionIdx };
     setAnswers(prev => ({ ...prev, [q.id]: optionIdx }));
-  };
+  }, [questions, currentIdx]);
 
-  const prevQuestion = () => {
+  const prevQuestion = useCallback(() => {
     if (currentIdx > 0) setCurrentIdx(prev => prev - 1);
-  };
+  }, [currentIdx]);
 
-  const nextQuestion = () => {
+  const nextQuestion = useCallback(() => {
     if (currentIdx < questions.length - 1) {
       setCurrentIdx(prev => prev + 1);
     } else {
       finishExam();
     }
-  };
+  }, [currentIdx, questions.length, finishExam]);
 
-  const skipAndFlag = () => {
+  const skipAndFlag = useCallback(() => {
     const q = questions[currentIdx];
     setFlagged(prev => new Set(prev).add(q.id));
     if (currentIdx < questions.length - 1) {
       setCurrentIdx(prev => prev + 1);
     }
-  };
+  }, [questions, currentIdx]);
 
-  const finishExam = () => {
+  // Use refs to always access latest state in timer callback
+  const answersRef = useRef<Record<string, number | null>>({});
+  const questionsRef = useRef<Question[]>([]);
+
+  const finishExam = useCallback(() => {
     clearInterval(timerRef.current);
+    const currentAnswers = answersRef.current;
+    const currentQuestions = questionsRef.current;
     const allQs = getQuestions();
-    const score = questions.filter(q => answers[q.id] === q.answer).length;
-    questions.forEach(q => {
-      if (answers[q.id] !== q.answer) addWrongQuestion(q.id, q.subject);
+    const score = currentQuestions.filter(q => currentAnswers[q.id] === q.answer).length;
+    currentQuestions.forEach(q => {
+      if (currentAnswers[q.id] !== q.answer) addWrongQuestion(q.id, q.subject);
     });
     const duration = Math.round((Date.now() - startTime.current) / 1000);
     const s: TestSession = {
@@ -93,20 +102,20 @@ export default function ExamPage() {
       type: 'exam',
       subject: subject === 'all' ? 'Mixed' : subject,
       level,
-      questionIds: questions.map(q => q.id),
-      answers,
+      questionIds: currentQuestions.map(q => q.id),
+      answers: currentAnswers,
       score,
-      total: questions.length,
+      total: currentQuestions.length,
       date: new Date().toISOString(),
       duration,
       completed: true,
     };
     saveSession(s);
-    addRecentIds(questions.map(q => q.id));
+    addRecentIds(currentQuestions.map(q => q.id));
     updateStats(s, allQs);
     setSession(s);
     setPhase('result');
-  };
+  }, [subject, level]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -120,7 +129,7 @@ export default function ExamPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [phase, currentIdx, questions]);
+  }, [phase, currentIdx, questions, selectAnswer, nextQuestion, prevQuestion, skipAndFlag]);
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 

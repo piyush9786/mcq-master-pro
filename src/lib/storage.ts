@@ -81,11 +81,11 @@ export function updateStats(session: TestSession, questions: Question[]) {
   const lastActive = stats.lastActiveDate?.split('T')[0];
 
   // Streak
-  if (lastActive) {
-    const diff = (new Date(today).getTime() - new Date(lastActive).getTime()) / 86400000;
+  if (lastActive && lastActive !== today) {
+    const diff = Math.round((new Date(today).getTime() - new Date(lastActive).getTime()) / 86400000);
     if (diff === 1) stats.streak++;
     else if (diff > 1) stats.streak = 1;
-  } else { stats.streak = 1; }
+  } else if (!lastActive) { stats.streak = 1; }
 
   stats.lastActiveDate = new Date().toISOString();
   stats.totalTests++;

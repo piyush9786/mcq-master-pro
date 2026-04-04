@@ -184,6 +184,14 @@ export default function ImportExportPage() {
               <Badge variant="secondary" className="text-xs">answer: valid index</Badge>
               <Badge variant="secondary" className="text-xs">explanation: string</Badge>
             </div>
+            <p className="text-xs font-medium mt-3">Formatting Support:</p>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="text-xs font-mono">`inline code`</Badge>
+              <Badge variant="outline" className="text-xs font-mono">```lang\ncode block\n```</Badge>
+              <Badge variant="outline" className="text-xs font-mono">$inline math$</Badge>
+              <Badge variant="outline" className="text-xs font-mono">$$block math$$</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Use LaTeX syntax for math (e.g. <code className="formatted-inline-code">$\frac&#123;1&#125;&#123;2&#125;$</code>) and backticks for code snippets.</p>
           </div>
         </CardContent>
       </Card>

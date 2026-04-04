@@ -38,28 +38,7 @@ export default function PracticePage() {
     setPhase('quiz');
   };
 
-  const selectAnswer = useCallback((optionIdx: number) => {
-    if (answers[questions[currentIdx].id] !== undefined) return;
-    const q = questions[currentIdx];
-    setAnswers(prev => ({ ...prev, [q.id]: optionIdx }));
-    setShowExplanation(true);
-
-    if (optionIdx !== q.answer) {
-      addWrongQuestion(q.id, q.subject);
-    } else {
-      markCorrected(q.id);
-    }
-  }, [answers, questions, currentIdx]);
-
-  const nextQuestion = useCallback(() => {
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx(prev => prev + 1);
-      setShowExplanation(false);
-    } else {
-      finishPractice();
-    }
-  }, [currentIdx, questions.length, finishPractice]);
-
+  // finishPractice declared first — nextQuestion depends on it
   const finishPractice = useCallback(() => {
     const score = questions.filter(q => answers[q.id] === q.answer).length;
     const s: TestSession = {
@@ -81,6 +60,27 @@ export default function PracticePage() {
     setSession(s);
     setPhase('result');
   }, [questions, answers, subject, level]);
+
+  const nextQuestion = useCallback(() => {
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(prev => prev + 1);
+      setShowExplanation(false);
+    } else {
+      finishPractice();
+    }
+  }, [currentIdx, questions.length, finishPractice]);
+
+  const selectAnswer = useCallback((optionIdx: number) => {
+    if (answers[questions[currentIdx].id] !== undefined) return;
+    const q = questions[currentIdx];
+    setAnswers(prev => ({ ...prev, [q.id]: optionIdx }));
+    setShowExplanation(true);
+    if (optionIdx !== q.answer) {
+      addWrongQuestion(q.id, q.subject);
+    } else {
+      markCorrected(q.id);
+    }
+  }, [answers, questions, currentIdx]);
 
   const retryWrong = () => {
     const wrong = questions.filter(q => answers[q.id] !== q.answer);

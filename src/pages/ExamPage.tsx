@@ -29,64 +29,13 @@ export default function ExamPage() {
   const startTime = useRef(0);
   const timerRef = useRef<NodeJS.Timeout>();
 
-  useEffect(() => { setSubjects(getSubjects()); }, []);
-
-  const startExam = () => {
-    const selected = selectQuestions(count, subject, level);
-    if (selected.length === 0) return;
-    questionsRef.current = selected;
-    setQuestions(selected);
-    setCurrentIdx(0);
-    answersRef.current = {};
-    setAnswers({});
-    setFlagged(new Set());
-    const totalTime = selected.length * timePerQ;
-    setTimeLeft(totalTime);
-    startTime.current = Date.now();
-    setPhase('quiz');
-  };
-
-  useEffect(() => {
-    if (phase !== 'quiz') return;
-    timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) { finishExam(); return 0; }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timerRef.current);
-  }, [phase, finishExam]);
-
-  const selectAnswer = useCallback((optionIdx: number) => {
-    const q = questions[currentIdx];
-    answersRef.current = { ...answersRef.current, [q.id]: optionIdx };
-    setAnswers(prev => ({ ...prev, [q.id]: optionIdx }));
-  }, [questions, currentIdx]);
-
-  const prevQuestion = useCallback(() => {
-    if (currentIdx > 0) setCurrentIdx(prev => prev - 1);
-  }, [currentIdx]);
-
-  const nextQuestion = useCallback(() => {
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx(prev => prev + 1);
-    } else {
-      finishExam();
-    }
-  }, [currentIdx, questions.length, finishExam]);
-
-  const skipAndFlag = useCallback(() => {
-    const q = questions[currentIdx];
-    setFlagged(prev => new Set(prev).add(q.id));
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx(prev => prev + 1);
-    }
-  }, [questions, currentIdx]);
-
-  // Use refs to always access latest state in timer callback
+  // Refs to always have latest state in timer callback (avoids stale closures)
   const answersRef = useRef<Record<string, number | null>>({});
   const questionsRef = useRef<Question[]>([]);
 
+  useEffect(() => { setSubjects(getSubjects()); }, []);
+
+  // finishExam declared first — nextQuestion depends on it
   const finishExam = useCallback(() => {
     clearInterval(timerRef.current);
     const currentAnswers = answersRef.current;
@@ -116,6 +65,58 @@ export default function ExamPage() {
     setSession(s);
     setPhase('result');
   }, [subject, level]);
+
+  const prevQuestion = useCallback(() => {
+    if (currentIdx > 0) setCurrentIdx(prev => prev - 1);
+  }, [currentIdx]);
+
+  const skipAndFlag = useCallback(() => {
+    const q = questions[currentIdx];
+    setFlagged(prev => new Set(prev).add(q.id));
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(prev => prev + 1);
+    }
+  }, [questions, currentIdx]);
+
+  const nextQuestion = useCallback(() => {
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(prev => prev + 1);
+    } else {
+      finishExam();
+    }
+  }, [currentIdx, questions.length, finishExam]);
+
+  const selectAnswer = useCallback((optionIdx: number) => {
+    const q = questions[currentIdx];
+    answersRef.current = { ...answersRef.current, [q.id]: optionIdx };
+    setAnswers(prev => ({ ...prev, [q.id]: optionIdx }));
+  }, [questions, currentIdx]);
+
+  const startExam = () => {
+    const selected = selectQuestions(count, subject, level);
+    if (selected.length === 0) return;
+    questionsRef.current = selected;
+    answersRef.current = {};
+    setQuestions(selected);
+    setCurrentIdx(0);
+    setAnswers({});
+    setFlagged(new Set());
+    const totalTime = selected.length * timePerQ;
+    setTimeLeft(totalTime);
+    startTime.current = Date.now();
+    setPhase('quiz');
+  };
+
+  useEffect(() => {
+    if (phase !== 'quiz') return;
+    timerRef.current = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) { finishExam(); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerRef.current);
+  }, [phase, finishExam]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -244,7 +245,6 @@ export default function ExamPage() {
   const q = questions[currentIdx];
   const progress = ((currentIdx + 1) / questions.length) * 100;
   const answeredCount = Object.keys(answers).length;
-  const unansweredCount = questions.length - answeredCount;
   const flaggedCount = flagged.size;
 
   return (

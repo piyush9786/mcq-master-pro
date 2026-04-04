@@ -156,7 +156,7 @@ export default function WrongQuestionsPage() {
                       <div className="space-y-1">
                         {q.options.map((opt, i) => (
                           <div key={i} className={`text-sm px-3 py-1.5 rounded ${i === q.answer ? 'bg-success/10 text-success font-medium' : 'text-muted-foreground'}`}>
-                            {opt}
+                            <FormattedText text={opt} />
                           </div>
                         ))}
                       </div>

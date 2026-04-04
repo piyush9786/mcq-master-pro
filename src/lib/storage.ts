@@ -26,9 +26,10 @@ export function setQuestions(q: Question[]) { set(KEYS.questions, q); }
 export function addQuestions(newQs: Question[]) {
   const existing = getQuestions();
   const existingIds = new Set(existing.map(q => q.id));
+  const duplicates = newQs.filter(q => existingIds.has(q.id)).map(q => q.id);
   const toAdd = newQs.filter(q => !existingIds.has(q.id));
   setQuestions([...existing, ...toAdd]);
-  return toAdd.length;
+  return { added: toAdd.length, duplicates };
 }
 export function toggleBookmark(id: string) {
   const qs = getQuestions();

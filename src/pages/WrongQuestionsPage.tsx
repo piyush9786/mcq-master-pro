@@ -144,7 +144,7 @@ export default function WrongQuestionsPage() {
                   <button className="w-full text-left flex items-center justify-between" onClick={() => toggle(w.questionId)}>
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <Badge variant="secondary" className="shrink-0">{q.subject}</Badge>
-                      <p className="text-sm font-medium truncate">{q.question}</p>
+                      <p className="text-sm font-medium truncate"><FormattedText text={q.question} /></p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       <span className="text-xs text-muted-foreground">{w.attempts}x wrong</span>

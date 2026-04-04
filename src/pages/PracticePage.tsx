@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import FormattedText from '@/components/FormattedText';
 
 type Phase = 'setup' | 'quiz' | 'result';
 

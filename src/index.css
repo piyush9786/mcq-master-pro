@@ -120,3 +120,12 @@
     @apply bg-card/80 backdrop-blur-xl border border-border/50 shadow-sm;
   }
 }
+
+/* Formatted text: code snippets & math */
+.formatted-code-block {
+  @apply bg-muted/70 rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono leading-relaxed;
+}
+
+.formatted-inline-code {
+  @apply bg-muted/70 px-1.5 py-0.5 rounded text-xs font-mono;
+}

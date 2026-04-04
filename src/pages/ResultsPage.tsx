@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import FormattedText from '@/components/FormattedText';
 
 export default function ResultsPage() {
   const [sessions, setSessions] = useState<TestSession[]>([]);

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Timer, ArrowRight, ArrowLeft, SkipForward, CheckCircle2, XCircle } from 'lucide-react';
+import FormattedText from '@/components/FormattedText';
 
 type Phase = 'setup' | 'quiz' | 'result';
 

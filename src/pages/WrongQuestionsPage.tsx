@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import jsPDF from 'jspdf';
+import FormattedText from '@/components/FormattedText';
 
 export default function WrongQuestionsPage() {
   const [wrongs, setWrongs] = useState<WrongQuestion[]>([]);

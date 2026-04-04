@@ -190,15 +190,15 @@ export default function PracticePage() {
             return (
               <Card key={q.id} className={`glass-card border-l-4 ${correct ? 'border-l-success' : 'border-l-destructive'}`}>
                 <CardContent className="p-4">
-                  <p className="font-medium text-sm mb-2">{i + 1}. {q.question}</p>
+                  <p className="font-medium text-sm mb-2">{i + 1}. <FormattedText text={q.question} /></p>
                   <div className="space-y-1 text-sm">
                     {q.options.map((opt, oi) => (
                       <div key={oi} className={`px-2 py-1 rounded ${oi === q.answer ? 'bg-success/10 text-success font-medium' : oi === userAns && oi !== q.answer ? 'bg-destructive/10 text-destructive line-through' : 'text-muted-foreground'}`}>
-                        {opt}
+                        <FormattedText text={opt} />
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2 italic">{q.explanation}</p>
+                  <p className="text-xs text-muted-foreground mt-2 italic"><FormattedText text={q.explanation} /></p>
                 </CardContent>
               </Card>
             );

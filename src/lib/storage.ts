@@ -20,17 +20,44 @@ function set(key: string, value: unknown) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+// Generate a unique ID that won't conflict with existing ones
+function generateUniqueId(existingIds: Set<string>): string {
+  let id: string;
+  do {
+    id = 'q_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+  } while (existingIds.has(id));
+  existingIds.add(id);
+  return id;
+}
+
 // Questions
 export function getQuestions(): Question[] { return get(KEYS.questions, []); }
 export function setQuestions(q: Question[]) { set(KEYS.questions, q); }
+
 export function addQuestions(newQs: Question[]) {
   const existing = getQuestions();
   const existingIds = new Set(existing.map(q => q.id));
-  const duplicates = newQs.filter(q => existingIds.has(q.id)).map(q => q.id);
-  const toAdd = newQs.filter(q => !existingIds.has(q.id));
-  setQuestions([...existing, ...toAdd]);
-  return { added: toAdd.length, duplicates };
+
+  // Auto-remap duplicate IDs instead of skipping them
+  const remapped: Question[] = [];
+  let autoRenamed = 0;
+
+  for (const q of newQs) {
+    if (existingIds.has(q.id)) {
+      // Generate a new unique ID for this question
+      const newId = generateUniqueId(existingIds);
+      remapped.push({ ...q, id: newId });
+      autoRenamed++;
+    } else {
+      existingIds.add(q.id);
+      remapped.push(q);
+    }
+  }
+
+  setQuestions([...existing, ...remapped]);
+  return { added: remapped.length, autoRenamed };
 }
+
 export function toggleBookmark(id: string) {
   const qs = getQuestions();
   const idx = qs.findIndex(q => q.id === id);
@@ -119,7 +146,7 @@ export function updateStats(session: TestSession, questions: Question[]) {
 export function getRecentIds(): string[] { return get(KEYS.recentQuestionIds, []); }
 export function addRecentIds(ids: string[]) {
   const recent = getRecentIds();
-  const updated = [...ids, ...recent].slice(0, 250); // keep last 250
+  const updated = [...ids, ...recent].slice(0, 250);
   set(KEYS.recentQuestionIds, updated);
 }
 
@@ -141,7 +168,6 @@ export function selectQuestions(
   const nonRecent = pool.filter(q => !recent.has(q.id));
   if (nonRecent.length >= count) pool = nonRecent;
 
-  // Shuffle and pick
   const shuffled = pool.sort(() => Math.random() - 0.5);
   return shuffled.slice(0, Math.min(count, shuffled.length));
 }

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Download, FileJson, CheckCircle2, AlertCircle, Copy } from 'lucide-react';
+import { Upload, Download, FileJson, CheckCircle2, AlertCircle, Copy, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const EXAMPLE_JSON = JSON.stringify({
@@ -29,15 +29,6 @@ const EXAMPLE_JSON = JSON.stringify({
       options: ["$\\frac{1}{2}$", "$\\frac{1}{3}$", "$\\frac{1}{4}$", "$1$"],
       answer: 1,
       explanation: "Using the power rule: $$\\int_0^1 x^2 \\, dx = \\frac{x^3}{3}\\Big|_0^1 = \\frac{1}{3}$$"
-    },
-    {
-      id: "q3",
-      subject: "Python",
-      level: "medium",
-      question: "What is the output of this code?\n```python\nx = [1, 2, 3]\nprint(x[::-1])\n```",
-      options: ["[3, 2, 1]", "[1, 2, 3]", "Error", "None"],
-      answer: 0,
-      explanation: "The slice `[::-1]` reverses the list."
     }
   ]
 }, null, 2);
@@ -46,7 +37,7 @@ export default function ImportExportPage() {
   const { toast } = useToast();
   const [jsonInput, setJsonInput] = useState('');
   const [errors, setErrors] = useState<string[]>([]);
-  const [importCount, setImportCount] = useState<number | null>(null);
+  const [importResult, setImportResult] = useState<{ added: number; autoRenamed: number } | null>(null);
   const [exportSubject, setExportSubject] = useState('all');
 
   const subjects = getSubjects();
@@ -57,35 +48,23 @@ export default function ImportExportPage() {
       const result = validateQuestionBank(data);
       if (!result.valid || !result.questions) {
         setErrors(result.errors);
-        setImportCount(null);
+        setImportResult(null);
         return;
       }
 
-      const { added, duplicates } = addQuestions(result.questions);
+      const { added, autoRenamed } = addQuestions(result.questions);
+      setImportResult({ added, autoRenamed });
+      setErrors([]);
 
-      if (added === 0 && duplicates.length > 0) {
-        setImportCount(null);
-        setErrors([
-          `All ${duplicates.length} questions were skipped because these IDs already exist. Try unique IDs or delete the old questions first.`,
-          `Duplicate IDs: ${duplicates.slice(0, 10).join(', ')}${duplicates.length > 10 ? '...' : ''}`,
-        ]);
-        toast({ title: 'No new questions imported', description: 'All question IDs already exist.' });
-        return;
-      }
-
-      setImportCount(added);
-      setErrors(
-        duplicates.length > 0
-          ? [`${duplicates.length} questions were skipped because their IDs already exist.`]
-          : []
-      );
       toast({
-        title: `Imported ${added} new questions!`,
-        description: duplicates.length > 0 ? `${duplicates.length} duplicate IDs were skipped.` : undefined,
+        title: `Imported ${added} questions!`,
+        description: autoRenamed > 0
+          ? `${autoRenamed} duplicate IDs were automatically reassigned new unique IDs.`
+          : 'All questions imported successfully.',
       });
     } catch {
       setErrors(['Invalid JSON format']);
-      setImportCount(null);
+      setImportResult(null);
     }
   };
 
@@ -93,9 +72,7 @@ export default function ImportExportPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      setJsonInput(ev.target?.result as string || '');
-    };
+    reader.onload = (ev) => setJsonInput(ev.target?.result as string || '');
     reader.readAsText(file);
   };
 
@@ -120,6 +97,15 @@ export default function ImportExportPage() {
       <div>
         <h1 className="text-2xl font-bold">Import / Export</h1>
         <p className="text-muted-foreground mt-1">Manage your question banks</p>
+      </div>
+
+      {/* Auto-ID notice */}
+      <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/5 border border-primary/20 text-sm">
+        <RefreshCw className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+        <div>
+          <p className="font-medium text-primary">Smart Duplicate Handling</p>
+          <p className="text-muted-foreground mt-0.5">If imported questions share IDs with existing ones, they're automatically assigned new unique IDs — so no questions are ever lost.</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -148,10 +134,17 @@ export default function ImportExportPage() {
                 ))}
               </div>
             )}
-            {importCount !== null && (
-              <p className="text-sm text-success flex items-center gap-1">
-                <CheckCircle2 className="h-4 w-4" /> {importCount} questions imported
-              </p>
+            {importResult !== null && (
+              <div className="space-y-1">
+                <p className="text-sm text-success flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4" /> {importResult.added} questions imported successfully
+                </p>
+                {importResult.autoRenamed > 0 && (
+                  <p className="text-xs text-primary flex items-center gap-1">
+                    <RefreshCw className="h-3 w-3" /> {importResult.autoRenamed} duplicate IDs auto-reassigned
+                  </p>
+                )}
+              </div>
             )}
             <Button onClick={handleImport} disabled={!jsonInput.trim()} className="w-full">
               <Upload className="h-4 w-4 mr-2" /> Import
@@ -196,21 +189,13 @@ export default function ImportExportPage() {
           <div className="mt-4 space-y-2">
             <p className="text-xs font-medium">Validation Rules:</p>
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary" className="text-xs">id: unique string</Badge>
+              <Badge variant="secondary" className="text-xs">id: unique string (auto-fixed on conflict)</Badge>
               <Badge variant="secondary" className="text-xs">subject: string</Badge>
               <Badge variant="secondary" className="text-xs">level: easy|medium|hard|expert</Badge>
               <Badge variant="secondary" className="text-xs">options: 2-6 items</Badge>
               <Badge variant="secondary" className="text-xs">answer: valid index</Badge>
               <Badge variant="secondary" className="text-xs">explanation: string</Badge>
             </div>
-            <p className="text-xs font-medium mt-3">Formatting Support:</p>
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline" className="text-xs font-mono">`inline code`</Badge>
-              <Badge variant="outline" className="text-xs font-mono">```lang\ncode block\n```</Badge>
-              <Badge variant="outline" className="text-xs font-mono">$inline math$</Badge>
-              <Badge variant="outline" className="text-xs font-mono">$$block math$$</Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Use LaTeX syntax for math (e.g. <code className="formatted-inline-code">$\frac&#123;1&#125;&#123;2&#125;$</code>) and backticks for code snippets.</p>
           </div>
         </CardContent>
       </Card>

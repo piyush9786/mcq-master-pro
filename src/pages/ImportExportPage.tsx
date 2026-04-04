@@ -16,10 +16,28 @@ const EXAMPLE_JSON = JSON.stringify({
       id: "q1",
       subject: "JavaScript",
       level: "easy",
-      question: "What is 1 + 1?",
-      options: ["1", "2", "3", "4"],
+      question: "What does `typeof null` return?",
+      options: ['"null"', '"object"', '"undefined"', '"number"'],
       answer: 1,
-      explanation: "Basic addition."
+      explanation: "Due to a historical bug, `typeof null` returns `\"object\"`."
+    },
+    {
+      id: "q2",
+      subject: "Math",
+      level: "medium",
+      question: "What is the value of $\\int_0^1 x^2 \\, dx$?",
+      options: ["$\\frac{1}{2}$", "$\\frac{1}{3}$", "$\\frac{1}{4}$", "$1$"],
+      answer: 1,
+      explanation: "Using the power rule: $$\\int_0^1 x^2 \\, dx = \\frac{x^3}{3}\\Big|_0^1 = \\frac{1}{3}$$"
+    },
+    {
+      id: "q3",
+      subject: "Python",
+      level: "medium",
+      question: "What is the output of this code?\n```python\nx = [1, 2, 3]\nprint(x[::-1])\n```",
+      options: ["[3, 2, 1]", "[1, 2, 3]", "Error", "None"],
+      answer: 0,
+      explanation: "The slice `[::-1]` reverses the list."
     }
   ]
 }, null, 2);
@@ -166,6 +184,14 @@ export default function ImportExportPage() {
               <Badge variant="secondary" className="text-xs">answer: valid index</Badge>
               <Badge variant="secondary" className="text-xs">explanation: string</Badge>
             </div>
+            <p className="text-xs font-medium mt-3">Formatting Support:</p>
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="text-xs font-mono">`inline code`</Badge>
+              <Badge variant="outline" className="text-xs font-mono">```lang\ncode block\n```</Badge>
+              <Badge variant="outline" className="text-xs font-mono">$inline math$</Badge>
+              <Badge variant="outline" className="text-xs font-mono">$$block math$$</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Use LaTeX syntax for math (e.g. <code className="formatted-inline-code">$\frac&#123;1&#125;&#123;2&#125;$</code>) and backticks for code snippets.</p>
           </div>
         </CardContent>
       </Card>

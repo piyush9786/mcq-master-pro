@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Trash2, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import jsPDF from 'jspdf';
+import FormattedText from '@/components/FormattedText';
 
 export default function WrongQuestionsPage() {
   const [wrongs, setWrongs] = useState<WrongQuestion[]>([]);
@@ -143,7 +144,7 @@ export default function WrongQuestionsPage() {
                   <button className="w-full text-left flex items-center justify-between" onClick={() => toggle(w.questionId)}>
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <Badge variant="secondary" className="shrink-0">{q.subject}</Badge>
-                      <p className="text-sm font-medium truncate">{q.question}</p>
+                      <p className="text-sm font-medium truncate"><FormattedText text={q.question} /></p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-2">
                       <span className="text-xs text-muted-foreground">{w.attempts}x wrong</span>
@@ -155,11 +156,11 @@ export default function WrongQuestionsPage() {
                       <div className="space-y-1">
                         {q.options.map((opt, i) => (
                           <div key={i} className={`text-sm px-3 py-1.5 rounded ${i === q.answer ? 'bg-success/10 text-success font-medium' : 'text-muted-foreground'}`}>
-                            {opt}
+                            <FormattedText text={opt} />
                           </div>
                         ))}
                       </div>
-                      <p className="text-sm text-muted-foreground italic p-2 bg-muted/50 rounded">{q.explanation}</p>
+                      <p className="text-sm text-muted-foreground italic p-2 bg-muted/50 rounded"><FormattedText text={q.explanation} /></p>
                     </div>
                   )}
                 </CardContent>

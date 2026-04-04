@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Timer, ArrowRight, ArrowLeft, SkipForward, CheckCircle2, XCircle } from 'lucide-react';
+import FormattedText from '@/components/FormattedText';
 
 type Phase = 'setup' | 'quiz' | 'result';
 
@@ -211,15 +212,15 @@ export default function ExamPage() {
               return (
                 <Card key={q.id} className={`glass-card border-l-4 ${correct ? 'border-l-success' : 'border-l-destructive'}`}>
                   <CardContent className="p-4">
-                    <p className="font-medium text-sm mb-2">{i + 1}. {q.question}</p>
+                    <p className="font-medium text-sm mb-2">{i + 1}. <FormattedText text={q.question} /></p>
                     <div className="space-y-1 text-sm">
                       {q.options.map((opt, oi) => (
                         <div key={oi} className={`px-2 py-1 rounded ${oi === q.answer ? 'bg-success/10 text-success font-medium' : oi === userAns && oi !== q.answer ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground'}`}>
-                          {opt}
+                          <FormattedText text={opt} />
                         </div>
                       ))}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-2 italic">{q.explanation}</p>
+                    <p className="text-xs text-muted-foreground mt-2 italic"><FormattedText text={q.explanation} /></p>
                   </CardContent>
                 </Card>
               );
@@ -282,7 +283,7 @@ export default function ExamPage() {
 
       <Card className="glass-card">
         <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-6">{q.question}</h2>
+          <h2 className="text-lg font-semibold mb-6"><FormattedText text={q.question} /></h2>
           <div className="space-y-3">
             {q.options.map((opt, i) => {
               const isSelected = answers[q.id] === i;
@@ -293,7 +294,7 @@ export default function ExamPage() {
                   onClick={() => selectAnswer(i)}
                 >
                   <span className="h-7 w-7 rounded-full border flex items-center justify-center text-xs font-medium shrink-0">{i + 1}</span>
-                  <span className="flex-1">{opt}</span>
+                  <span className="flex-1"><FormattedText text={opt} /></span>
                 </button>
               );
             })}

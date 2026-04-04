@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import FormattedText from '@/components/FormattedText';
 
 export default function ResultsPage() {
   const [sessions, setSessions] = useState<TestSession[]>([]);
@@ -81,15 +82,15 @@ export default function ResultsPage() {
                         const correct = userAns === q.answer;
                         return (
                           <div key={qId} className={`p-3 rounded-lg border-l-4 ${correct ? 'border-l-success bg-success/5' : 'border-l-destructive bg-destructive/5'}`}>
-                            <p className="font-medium text-sm mb-2">{i + 1}. {q.question}</p>
+                            <p className="font-medium text-sm mb-2">{i + 1}. <FormattedText text={q.question} /></p>
                             <div className="space-y-1 text-sm">
                               {q.options.map((opt, oi) => (
                                 <div key={oi} className={`px-2 py-1 rounded ${oi === q.answer ? 'bg-success/10 text-success font-medium' : oi === userAns && oi !== q.answer ? 'bg-destructive/10 text-destructive line-through' : 'text-muted-foreground'}`}>
-                                  {String.fromCharCode(65 + oi)}. {opt}
+                                  {String.fromCharCode(65 + oi)}. <FormattedText text={opt} />
                                 </div>
                               ))}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-2 italic">{q.explanation}</p>
+                            <p className="text-xs text-muted-foreground mt-2 italic"><FormattedText text={q.explanation} /></p>
                           </div>
                         );
                       })}

@@ -172,6 +172,24 @@ export function selectQuestions(
   return shuffled.slice(0, Math.min(count, shuffled.length));
 }
 
+// Level normalization map — handles common non-standard formats
+const LEVEL_ALIASES: Record<string, string> = {
+  // easy
+  easy: 'easy', beginner: 'easy', basic: 'easy', simple: 'easy', '1': 'easy', low: 'easy',
+  // medium
+  medium: 'medium', intermediate: 'medium', moderate: 'medium', normal: 'medium', '2': 'medium', mid: 'medium', average: 'medium',
+  // hard
+  hard: 'hard', difficult: 'hard', advanced: 'hard', '3': 'hard', high: 'hard', tough: 'hard',
+  // expert
+  expert: 'expert', master: 'expert', extreme: 'expert', '4': 'expert', pro: 'expert', professional: 'expert', insane: 'expert',
+};
+
+function normalizeLevel(raw: any): string | null {
+  if (!raw) return null;
+  const key = String(raw).toLowerCase().trim();
+  return LEVEL_ALIASES[key] || null;
+}
+
 // Validation
 export function validateQuestionBank(data: unknown): { valid: boolean; errors: string[]; questions?: Question[] } {
   const errors: string[] = [];
@@ -181,20 +199,43 @@ export function validateQuestionBank(data: unknown): { valid: boolean; errors: s
   if (!Array.isArray(bank.questions)) return { valid: false, errors: ['Missing "questions" array'] };
 
   const validQuestions: Question[] = [];
+  let autoFixedLevels = 0;
+
   bank.questions.forEach((q: any, i: number) => {
     const missing = questionSchema.required.filter(f => !(f in q));
     if (missing.length) { errors.push(`Q${i + 1}: Missing fields: ${missing.join(', ')}`); return; }
-    if (!questionSchema.levels.includes(q.level)) { errors.push(`Q${i + 1}: Invalid level "${q.level}"`); return; }
+
+    // Auto-normalize level
+    let level = q.level;
+    if (!questionSchema.levels.includes(level)) {
+      const normalized = normalizeLevel(level);
+      if (normalized) {
+        level = normalized;
+        autoFixedLevels++;
+      } else {
+        errors.push(`Q${i + 1}: Invalid level "${q.level}" — use easy/medium/hard/expert`);
+        return;
+      }
+    }
+
     if (!Array.isArray(q.options) || q.options.length < questionSchema.minOptions) {
       errors.push(`Q${i + 1}: Must have at least ${questionSchema.minOptions} options`); return;
     }
     if (typeof q.answer !== 'number' || q.answer < 0 || q.answer >= q.options.length) {
       errors.push(`Q${i + 1}: Invalid answer index`); return;
     }
-    validQuestions.push(q as Question);
+    validQuestions.push({ ...q, level } as Question);
   });
 
-  return { valid: errors.length === 0, errors, questions: validQuestions };
+  return {
+    valid: errors.length === 0,
+    errors: autoFixedLevels > 0
+      ? [`ℹ️ ${autoFixedLevels} question(s) had non-standard levels that were auto-normalized.`, ...errors]
+      : errors,
+    questions: validQuestions,
+    // @ts-ignore
+    autoFixedLevels,
+  };
 }
 
 // Export

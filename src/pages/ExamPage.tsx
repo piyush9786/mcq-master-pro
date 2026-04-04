@@ -6,10 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Timer, ArrowRight, ArrowLeft, SkipForward, CheckCircle2, XCircle } from 'lucide-react';
+import { Timer, ArrowRight, ArrowLeft, SkipForward, CheckCircle2, XCircle, Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
 import FormattedText from '@/components/FormattedText';
 
 type Phase = 'setup' | 'quiz' | 'result';
+
+const LEVEL_COLORS: Record<string, string> = {
+  easy: 'bg-success', medium: 'bg-warning', hard: 'bg-orange-500', expert: 'bg-destructive'
+};
 
 export default function ExamPage() {
   const [phase, setPhase] = useState<Phase>('setup');
@@ -18,7 +22,6 @@ export default function ExamPage() {
   const [count, setCount] = useState(10);
   const [timePerQ, setTimePerQ] = useState(60);
   const [subjects, setSubjects] = useState<string[]>([]);
-
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
@@ -26,94 +29,88 @@ export default function ExamPage() {
   const [session, setSession] = useState<TestSession | null>(null);
   const [showReview, setShowReview] = useState(false);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const startTime = useRef(0);
   const timerRef = useRef<NodeJS.Timeout>();
-
-  // Refs to always have latest state in timer callback (avoids stale closures)
   const answersRef = useRef<Record<string, number | null>>({});
   const questionsRef = useRef<Question[]>([]);
 
+  const allQuestions = getQuestions();
   useEffect(() => { setSubjects(getSubjects()); }, []);
 
-  // finishExam declared first — nextQuestion depends on it
+  const getAvailable = (subj: string, lvl: Difficulty | 'mixed') =>
+    allQuestions.filter(q => (subj === 'all' || q.subject === subj) && (lvl === 'mixed' || q.level === lvl)).length;
+  const available = getAvailable(subject, level);
+  const levelCounts = (['easy','medium','hard','expert'] as const).map(lvl => ({
+    lvl, count: allQuestions.filter(q => (subject === 'all' || q.subject === subject) && q.level === lvl).length
+  })).filter(x => x.count > 0);
+
+  // Fullscreen
+  const enterFullscreen = () => {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    setIsFullscreen(true);
+  };
+  const exitFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    setIsFullscreen(false);
+  };
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement) setIsFullscreen(false); };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  useEffect(() => { if (phase !== 'quiz' && isFullscreen) exitFullscreen(); }, [phase]);
+
+  // finishExam first (nextQuestion depends on it)
   const finishExam = useCallback(() => {
     clearInterval(timerRef.current);
-    const currentAnswers = answersRef.current;
-    const currentQuestions = questionsRef.current;
+    const curAnswers = answersRef.current;
+    const curQuestions = questionsRef.current;
     const allQs = getQuestions();
-    const score = currentQuestions.filter(q => currentAnswers[q.id] === q.answer).length;
-    currentQuestions.forEach(q => {
-      if (currentAnswers[q.id] !== q.answer) addWrongQuestion(q.id, q.subject);
-    });
+    const score = curQuestions.filter(q => curAnswers[q.id] === q.answer).length;
+    curQuestions.forEach(q => { if (curAnswers[q.id] !== q.answer) addWrongQuestion(q.id, q.subject); });
     const duration = Math.round((Date.now() - startTime.current) / 1000);
     const s: TestSession = {
-      id: crypto.randomUUID(),
-      type: 'exam',
-      subject: subject === 'all' ? 'Mixed' : subject,
-      level,
-      questionIds: currentQuestions.map(q => q.id),
-      answers: currentAnswers,
-      score,
-      total: currentQuestions.length,
-      date: new Date().toISOString(),
-      duration,
-      completed: true,
+      id: crypto.randomUUID(), type: 'exam',
+      subject: subject === 'all' ? 'Mixed' : subject, level,
+      questionIds: curQuestions.map(q => q.id), answers: curAnswers,
+      score, total: curQuestions.length, date: new Date().toISOString(), duration, completed: true,
     };
-    saveSession(s);
-    addRecentIds(currentQuestions.map(q => q.id));
-    updateStats(s, allQs);
-    setSession(s);
-    setPhase('result');
+    saveSession(s); addRecentIds(curQuestions.map(q => q.id)); updateStats(s, allQs);
+    setSession(s); setPhase('result');
   }, [subject, level]);
 
-  const prevQuestion = useCallback(() => {
-    if (currentIdx > 0) setCurrentIdx(prev => prev - 1);
-  }, [currentIdx]);
-
+  const prevQuestion = useCallback(() => { if (currentIdx > 0) setCurrentIdx(p => p - 1); }, [currentIdx]);
   const skipAndFlag = useCallback(() => {
     const q = questions[currentIdx];
-    setFlagged(prev => new Set(prev).add(q.id));
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx(prev => prev + 1);
-    }
+    setFlagged(p => new Set(p).add(q.id));
+    if (currentIdx < questions.length - 1) setCurrentIdx(p => p + 1);
   }, [questions, currentIdx]);
-
   const nextQuestion = useCallback(() => {
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx(prev => prev + 1);
-    } else {
-      finishExam();
-    }
+    if (currentIdx < questions.length - 1) setCurrentIdx(p => p + 1);
+    else finishExam();
   }, [currentIdx, questions.length, finishExam]);
-
   const selectAnswer = useCallback((optionIdx: number) => {
     const q = questions[currentIdx];
     answersRef.current = { ...answersRef.current, [q.id]: optionIdx };
-    setAnswers(prev => ({ ...prev, [q.id]: optionIdx }));
+    setAnswers(p => ({ ...p, [q.id]: optionIdx }));
   }, [questions, currentIdx]);
 
   const startExam = () => {
-    const selected = selectQuestions(count, subject, level);
-    if (selected.length === 0) return;
-    questionsRef.current = selected;
-    answersRef.current = {};
-    setQuestions(selected);
-    setCurrentIdx(0);
-    setAnswers({});
-    setFlagged(new Set());
-    const totalTime = selected.length * timePerQ;
-    setTimeLeft(totalTime);
-    startTime.current = Date.now();
-    setPhase('quiz');
+    const effectiveCount = Math.min(count, available);
+    if (effectiveCount === 0) return;
+    const selected = selectQuestions(effectiveCount, subject, level);
+    if (!selected.length) return;
+    questionsRef.current = selected; answersRef.current = {};
+    setQuestions(selected); setCurrentIdx(0); setAnswers({}); setFlagged(new Set());
+    setTimeLeft(selected.length * timePerQ); startTime.current = Date.now();
+    setPhase('quiz'); enterFullscreen();
   };
 
   useEffect(() => {
     if (phase !== 'quiz') return;
     timerRef.current = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) { finishExam(); return 0; }
-        return prev - 1;
-      });
+      setTimeLeft(p => { if (p <= 1) { finishExam(); return 0; } return p - 1; });
     }, 1000);
     return () => clearInterval(timerRef.current);
   }, [phase, finishExam]);
@@ -127,25 +124,29 @@ export default function ExamPage() {
       if (e.key === 'Enter') nextQuestion();
       if (e.key === 'ArrowLeft') prevQuestion();
       if (e.key === 's' || e.key === 'S') skipAndFlag();
+      if (e.key === 'Escape') exitFullscreen();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [phase, currentIdx, questions, selectAnswer, nextQuestion, prevQuestion, skipAndFlag]);
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const totalTime = questions.length * timePerQ;
+  const timeProgress = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
 
+  // ── SETUP ────────────────────────────────────────────────────────────────
   if (phase === 'setup') {
     return (
-      <div className="max-w-lg mx-auto space-y-6 animate-fade-in">
-        <div>
-          <h1 className="text-2xl font-bold">Exam Mode</h1>
+      <div className="max-w-lg mx-auto space-y-6">
+        <div className="animate-fade-in">
+          <h1 className="text-2xl font-bold shimmer-text">Exam Mode</h1>
           <p className="text-muted-foreground mt-1">Timed assessment, no peeking at answers</p>
         </div>
-        <Card className="glass-card">
-          <CardContent className="p-6 space-y-4">
+        <Card className="glass-card animate-scale-in" style={{ animationDelay: '80ms' }}>
+          <CardContent className="p-6 space-y-5">
             <div>
               <label className="text-sm font-medium mb-1.5 block">Subject</label>
-              <Select value={subject} onValueChange={setSubject}>
+              <Select value={subject} onValueChange={v => { setSubject(v); setCount(Math.min(count, getAvailable(v, level))); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Subjects</SelectItem>
@@ -153,9 +154,10 @@ export default function ExamPage() {
                 </SelectContent>
               </Select>
             </div>
+
             <div>
               <label className="text-sm font-medium mb-1.5 block">Difficulty</label>
-              <Select value={level} onValueChange={(v) => setLevel(v as any)}>
+              <Select value={level} onValueChange={v => { setLevel(v as any); setCount(Math.min(count, getAvailable(subject, v as any))); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="mixed">Mixed</SelectItem>
@@ -166,46 +168,94 @@ export default function ExamPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Questions</label>
-                <Select value={String(count)} onValueChange={(v) => setCount(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {[5, 10, 15, 20, 25].map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+
+            {/* Level chips */}
+            {levelCounts.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground font-medium">Available by level</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {levelCounts.map(({ lvl, count: c }) => (
+                    <button key={lvl} onClick={() => setLevel(lvl)}
+                      className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all ${level === lvl ? `${LEVEL_COLORS[lvl]} text-white scale-105` : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}>
+                      {lvl} · {c}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Sec/Question</label>
-                <Select value={String(timePerQ)} onValueChange={(v) => setTimePerQ(Number(v))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {[30, 45, 60, 90, 120].map(n => <SelectItem key={n} value={String(n)}>{n}s</SelectItem>)}
-                  </SelectContent>
-                </Select>
+            )}
+
+            {/* Question count stepper */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Questions</label>
+                <span className="text-xs text-muted-foreground">{available} available</span>
+              </div>
+              <div className="flex items-center gap-3 mb-3">
+                <button onClick={() => setCount(c => Math.max(1, c - 5))}
+                  className="h-9 w-9 rounded-xl border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
+                  disabled={count <= 1}>
+                  <Minus className="h-4 w-4" />
+                </button>
+                <div className="flex-1 text-center">
+                  <span className="text-4xl font-bold tabular-nums">{Math.min(count, available || 1)}</span>
+                </div>
+                <button onClick={() => setCount(c => Math.min(available, c + 5))}
+                  className="h-9 w-9 rounded-xl border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
+                  disabled={count >= available}>
+                  <Plus className="h-4 w-4" />
+                </button>
+              </div>
+              <input type="range" min={1} max={Math.max(1, available)} value={Math.min(count, available)}
+                onChange={e => setCount(Number(e.target.value))}
+                className="w-full accent-primary cursor-pointer" />
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                <span>1</span><span>{available}</span>
               </div>
             </div>
-            <Button className="w-full" size="lg" onClick={startExam}>
-              <Timer className="h-4 w-4 mr-2" /> Start Exam
+
+            {/* Time per question */}
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Time per Question</label>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[30, 45, 60, 90, 120].map(t => (
+                  <button key={t} onClick={() => setTimePerQ(t)}
+                    className={`py-2 rounded-xl text-xs font-medium transition-all ${timePerQ === t ? 'bg-primary text-primary-foreground shadow' : 'bg-muted hover:bg-muted/80'}`}>
+                    {t}s
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                Total time: {formatTime(Math.min(count, available) * timePerQ)}
+              </p>
+            </div>
+
+            <Button className="w-full gap-2" size="lg" onClick={startExam} disabled={available === 0}>
+              <Timer className="h-4 w-4" />
+              {available === 0 ? 'No questions available' : `Start Exam · ${Math.min(count, available)} Qs`}
+              <Maximize2 className="h-3.5 w-3.5 opacity-60" />
             </Button>
+            <p className="text-center text-xs text-muted-foreground">Will open in fullscreen</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
+  // ── RESULT ────────────────────────────────────────────────────────────────
   if (phase === 'result' && session) {
     const pct = Math.round((session.score / session.total) * 100);
     return (
-      <div className="max-w-lg mx-auto space-y-6 animate-fade-in">
-        <Card className="glass-card">
+      <div className="max-w-lg mx-auto space-y-5">
+        <Card className="glass-card animate-bounce-in">
           <CardContent className="p-8 text-center space-y-4">
-            <div className="text-5xl font-bold">{pct}%</div>
+            <div className="text-6xl font-bold" style={{ color: pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444' }}>{pct}%</div>
             <p className="text-muted-foreground">{session.score} of {session.total} correct</p>
             <p className="text-sm text-muted-foreground">Time: {formatTime(session.duration)}</p>
-            <Progress value={pct} className="h-3" />
-            <div className="flex gap-4 justify-center pt-4">
+            <div className="h-3 bg-muted rounded-full overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-primary to-accent animate-progress-fill"
+                style={{ width: `${pct}%` }} />
+            </div>
+            <div className="flex gap-4 justify-center pt-2">
               <Button variant="outline" onClick={() => setShowReview(!showReview)}>
                 {showReview ? 'Hide Review' : 'Review Answers'}
               </Button>
@@ -220,7 +270,8 @@ export default function ExamPage() {
               const userAns = answers[q.id];
               const correct = userAns === q.answer;
               return (
-                <Card key={q.id} className={`glass-card border-l-4 ${correct ? 'border-l-success' : 'border-l-destructive'}`}>
+                <Card key={q.id} className={`glass-card border-l-4 animate-fade-in ${correct ? 'border-l-success' : 'border-l-destructive'}`}
+                  style={{ animationDelay: `${i * 40}ms` }}>
                   <CardContent className="p-4">
                     <p className="font-medium text-sm mb-2">{i + 1}. <FormattedText text={q.question} /></p>
                     <div className="space-y-1 text-sm">
@@ -241,92 +292,108 @@ export default function ExamPage() {
     );
   }
 
-  // Quiz phase
+  // ── QUIZ (fullscreen) ─────────────────────────────────────────────────────
   const q = questions[currentIdx];
   const progress = ((currentIdx + 1) / questions.length) * 100;
   const answeredCount = Object.keys(answers).length;
   const flaggedCount = flagged.size;
+  const isLowTime = timeLeft < 30;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <Badge variant="secondary">{q.subject} • {q.level}</Badge>
-        <div className="flex items-center gap-4">
-          <div className="text-xs text-muted-foreground space-x-2">
-            <span>Answered: {answeredCount}/{questions.length}</span>
-            {flaggedCount > 0 && <span className="text-warning">• Flagged: {flaggedCount}</span>}
-          </div>
-          <div className="flex items-center gap-2">
-            <Timer className={`h-4 w-4 ${timeLeft < 30 ? 'text-destructive animate-pulse' : 'text-muted-foreground'}`} />
-            <span className={`text-sm font-mono font-medium ${timeLeft < 30 ? 'text-destructive' : ''}`}>{formatTime(timeLeft)}</span>
+    <div className={isFullscreen ? 'fullscreen-quiz' : 'max-w-2xl mx-auto py-4'}>
+      <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
+        {/* Top bar */}
+        <div className="flex items-center justify-between">
+          <Badge variant="secondary">{q.subject} · {q.level}</Badge>
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-muted-foreground">
+              {answeredCount}/{questions.length} answered
+              {flaggedCount > 0 && <span className="text-warning ml-2">· {flaggedCount} flagged</span>}
+            </div>
+            {/* Timer */}
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${isLowTime ? 'bg-destructive/10 text-destructive animate-pulse' : 'bg-muted text-foreground'}`}>
+              <Timer className="h-3.5 w-3.5" />
+              <span className="text-sm font-mono font-bold">{formatTime(timeLeft)}</span>
+            </div>
+            <button onClick={isFullscreen ? exitFullscreen : enterFullscreen}
+              className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors">
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
           </div>
         </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <Progress value={progress} className="h-1.5 flex-1" />
-        <span className="text-xs text-muted-foreground">{currentIdx + 1}/{questions.length}</span>
-      </div>
 
-      {/* Question number grid */}
-      <div className="flex flex-wrap gap-1.5">
-        {questions.map((qi, i) => {
-          const isAnswered = answers[qi.id] !== undefined;
-          const isFlagged = flagged.has(qi.id);
-          const isCurrent = i === currentIdx;
-          return (
-            <button
-              key={qi.id}
-              onClick={() => setCurrentIdx(i)}
-              className={`h-7 w-7 rounded text-xs font-medium transition-all border ${
-                isCurrent ? 'border-primary bg-primary text-primary-foreground' :
-                isFlagged ? 'border-warning bg-warning/10 text-warning' :
-                isAnswered ? 'border-success/50 bg-success/10 text-success' :
-                'border-border text-muted-foreground hover:border-primary'
-              }`}
-            >
-              {i + 1}
-            </button>
-          );
-        })}
-      </div>
+        {/* Dual progress: questions + timer */}
+        <div className="space-y-1">
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }} />
+          </div>
+          <div className="h-1 bg-muted rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-1000 ${isLowTime ? 'bg-destructive' : 'bg-warning/70'}`}
+              style={{ width: `${timeProgress}%` }} />
+          </div>
+        </div>
 
-      <Card className="glass-card">
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold mb-6"><FormattedText text={q.question} /></h2>
-          <div className="space-y-3">
-            {q.options.map((opt, i) => {
-              const isSelected = answers[q.id] === i;
-              return (
-                <button
-                  key={i}
-                  className={`w-full text-left flex items-center gap-3 border rounded-lg p-4 text-sm transition-all ${isSelected ? 'border-primary bg-primary/10' : 'border-border hover:border-primary hover:bg-primary/5'}`}
-                  onClick={() => selectAnswer(i)}
-                >
-                  <span className="h-7 w-7 rounded-full border flex items-center justify-center text-xs font-medium shrink-0">{i + 1}</span>
-                  <span className="flex-1"><FormattedText text={opt} /></span>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-6 flex items-center justify-between">
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={prevQuestion} disabled={currentIdx === 0}>
-                <ArrowLeft className="h-4 w-4 mr-1" /> Previous
-              </Button>
-              <Button variant="outline" onClick={skipAndFlag} disabled={currentIdx === questions.length - 1} title="Skip & Review Later">
-                <SkipForward className="h-4 w-4 mr-1" /> Skip
-              </Button>
+        {/* Question number grid */}
+        <div className="flex flex-wrap gap-1.5">
+          {questions.map((qi, i) => {
+            const isAnswered = answers[qi.id] !== undefined;
+            const isFlagged = flagged.has(qi.id);
+            const isCurrent = i === currentIdx;
+            return (
+              <button key={qi.id} onClick={() => setCurrentIdx(i)}
+                className={`h-7 w-7 rounded-lg text-xs font-medium transition-all border ${
+                  isCurrent ? 'border-primary bg-primary text-primary-foreground scale-110 shadow' :
+                  isFlagged ? 'border-warning bg-warning/10 text-warning' :
+                  isAnswered ? 'border-success/50 bg-success/10 text-success' :
+                  'border-border text-muted-foreground hover:border-primary'
+                }`}>
+                {i + 1}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Question card */}
+        <Card className="glass-card">
+          <CardContent className="p-6">
+            <h2 className="text-lg font-semibold mb-6 leading-relaxed"><FormattedText text={q.question} /></h2>
+            <div className="space-y-3">
+              {q.options.map((opt, i) => {
+                const isSelected = answers[q.id] === i;
+                return (
+                  <button key={i}
+                    className={`w-full text-left flex items-center gap-3 border rounded-xl p-4 text-sm transition-all duration-200 ${isSelected ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:border-primary hover:bg-primary/5 hover:-translate-y-0.5'}`}
+                    onClick={() => selectAnswer(i)}
+                    style={{ animation: `stagger-in 0.3s ease both ${i * 50}ms` }}>
+                    <span className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${isSelected ? 'border-primary bg-primary text-white' : 'border-border'}`}>
+                      {i + 1}
+                    </span>
+                    <span className="flex-1"><FormattedText text={opt} /></span>
+                  </button>
+                );
+              })}
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={finishExam}>Submit Exam</Button>
-              <Button onClick={nextQuestion}>
-                {currentIdx < questions.length - 1 ? <>Next <ArrowRight className="h-4 w-4 ml-1" /></> : 'Finish'}
-              </Button>
+            <div className="mt-6 flex items-center justify-between">
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={prevQuestion} disabled={currentIdx === 0}>
+                  <ArrowLeft className="h-4 w-4 mr-1" /> Prev
+                </Button>
+                <Button variant="outline" size="sm" onClick={skipAndFlag} disabled={currentIdx === questions.length - 1}>
+                  <SkipForward className="h-4 w-4 mr-1" /> Skip
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={finishExam}>Submit</Button>
+                <Button size="sm" onClick={nextQuestion}>
+                  {currentIdx < questions.length - 1 ? <>Next <ArrowRight className="h-4 w-4 ml-1" /></> : 'Finish 🎉'}
+                </Button>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-      <p className="text-xs text-center text-muted-foreground">Keys: 1-{q.options.length} answer • ← prev • S skip • Enter next</p>
+          </CardContent>
+        </Card>
+        <p className="text-xs text-center text-muted-foreground">1–{q.options.length} answer · ← prev · S skip · Enter next · Esc exit</p>
+      </div>
     </div>
   );
 }

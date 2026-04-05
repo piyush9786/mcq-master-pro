@@ -212,7 +212,7 @@ export default function ImportExportPage() {
               </div>
             </div>
             <pre className="text-xs font-mono p-4 overflow-auto max-h-72 bg-muted/20 leading-relaxed">
-              <code>{FULL_SAMPLE}</code>
+              <code>{FULL_SAMPLE_JSON}</code>
             </pre>
           </div>
 

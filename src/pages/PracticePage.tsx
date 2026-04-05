@@ -157,7 +157,7 @@ export default function PracticePage() {
   const retryWrong = () => {
     const wrong = questions.filter(q => answers[q.id] !== q.answer);
     if (!wrong.length) return;
-    clearSession();
+    clearSession('practice');
     setQuestions(wrong); setCurrentIdx(0); setAnswers({}); setShowExplanation(false);
     setPhase('quiz'); enterFullscreen();
   };

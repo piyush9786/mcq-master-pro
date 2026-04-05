@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getSubjects, selectQuestions, saveSession, addWrongQuestion, updateStats, getQuestions, addRecentIds } from '@/lib/storage';
+import { getSubjects, selectQuestions, saveSession as saveToStorage, addWrongQuestion, updateStats, getQuestions, addRecentIds } from '@/lib/storage';
 import { Question, TestSession, Difficulty } from '@/types/mcq';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Timer, ArrowRight, ArrowLeft, SkipForward, Maximize2, Minimize2, Minus, Plus, Eye, AlertTriangle } from 'lucide-react';
+import { Timer, ArrowRight, ArrowLeft, SkipForward, Maximize2, Minimize2, Minus, Plus, Eye, AlertTriangle, PlayCircle } from 'lucide-react';
 import FormattedText from '@/components/FormattedText';
 import ResultCelebration from '@/components/ResultCelebration';
+import { saveSession as persistSession, loadSession, clearSession, correctTimerDrift } from '@/hooks/usePersistedExam';
 
 type Phase = 'setup' | 'quiz' | 'result';
 
@@ -26,6 +27,7 @@ export default function ExamPage() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
   const [timeLeft, setTimeLeft] = useState(0);
+  const [totalTime, setTotalTime] = useState(0);
   const [session, setSession] = useState<TestSession | null>(null);
   const [showReview, setShowReview] = useState(false);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
@@ -35,23 +37,29 @@ export default function ExamPage() {
   const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
   const [unansweredIds, setUnansweredIds] = useState<string[]>([]);
   const [showCelebration, setShowCelebration] = useState(false);
-  const [celebrationData, setCelebrationData] = useState<{pct:number;score:number;total:number;xp:number}|null>(null);
-  const startTime = useRef(0);
+  const [celebrationData, setCelebrationData] = useState<{ pct: number; score: number; total: number; xp: number } | null>(null);
+  const [hasResumable, setHasResumable] = useState(false);
   const timerRef = useRef<NodeJS.Timeout>();
   const answersRef = useRef<Record<string, number | null>>({});
   const questionsRef = useRef<Question[]>([]);
+  const timeLeftRef = useRef(0);
+  const tabWarningsRef = useRef(0);
 
   const allQuestions = getQuestions();
-  useEffect(() => { setSubjects(getSubjects()); }, []);
+  useEffect(() => {
+    setSubjects(getSubjects());
+    const saved = loadSession('exam');
+    if (saved && saved.phase === 'quiz') setHasResumable(true);
+  }, []);
 
   const getAvailable = (subj: string, lvl: Difficulty | 'mixed') =>
     allQuestions.filter(q => (subj === 'all' || q.subject === subj) && (lvl === 'mixed' || q.level === lvl)).length;
   const available = getAvailable(subject, level);
-  const levelCounts = (['easy','medium','hard','expert'] as const).map(lvl => ({
+  const levelCounts = (['easy', 'medium', 'hard', 'expert'] as const).map(lvl => ({
     lvl, count: allQuestions.filter(q => (subject === 'all' || q.subject === subject) && q.level === lvl).length
   })).filter(x => x.count > 0);
 
-  // ── Fullscreen ────────────────────────────────────────────────
+  // Fullscreen
   const enterFullscreen = () => { document.documentElement.requestFullscreen?.().catch(() => {}); setIsFullscreen(true); };
   const exitFullscreen = () => { if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); setIsFullscreen(false); };
   useEffect(() => {
@@ -61,51 +69,76 @@ export default function ExamPage() {
   }, []);
   useEffect(() => { if (phase !== 'quiz' && isFullscreen) exitFullscreen(); }, [phase]);
 
-  // ── Tab-switch detection: don't stop exam, just warn ─────────
+  // Persist state every 5 seconds during quiz
+  useEffect(() => {
+    if (phase !== 'quiz' || questions.length === 0) return;
+    const save = () => {
+      persistSession({
+        type: 'exam', phase: 'quiz',
+        subject, level,
+        questions, answers: answersRef.current, currentIdx,
+        flagged: [...flagged],
+        timeLeft: timeLeftRef.current,
+        totalTime,
+        tabWarnings: tabWarningsRef.current,
+        startedAt: Date.now(), savedAt: Date.now(),
+      });
+    };
+    save(); // save immediately
+    const interval = setInterval(save, 5000);
+    return () => clearInterval(interval);
+  }, [phase, questions, currentIdx, flagged, totalTime, subject, level]);
+
+  // Tab-switch detection — exam continues, just warns
   useEffect(() => {
     if (phase !== 'quiz') return;
-    const onVisible = () => {
+    const onVisibility = () => {
       if (document.hidden) {
-        setTabWarnings(w => w + 1);
+        tabWarningsRef.current++;
+        setTabWarnings(tabWarningsRef.current);
         setShowTabWarning(true);
-        setTimeout(() => setShowTabWarning(false), 3000);
+        setTimeout(() => setShowTabWarning(false), 3500);
       }
     };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [phase]);
 
-  // ── Core exam logic ───────────────────────────────────────────
+  // finishExam (must be declared before nextQuestion)
   const finishExam = useCallback(() => {
     clearInterval(timerRef.current);
+    clearSession('exam');
     const curAnswers = answersRef.current;
     const curQuestions = questionsRef.current;
     const allQs = getQuestions();
     const score = curQuestions.filter(q => curAnswers[q.id] === q.answer).length;
     curQuestions.forEach(q => { if (curAnswers[q.id] !== q.answer) addWrongQuestion(q.id, q.subject); });
-    const duration = Math.round((Date.now() - startTime.current) / 1000);
     const s: TestSession = {
       id: crypto.randomUUID(), type: 'exam',
       subject: subject === 'all' ? 'Mixed' : subject, level,
       questionIds: curQuestions.map(q => q.id), answers: curAnswers,
-      score, total: curQuestions.length, date: new Date().toISOString(), duration, completed: true,
+      score, total: curQuestions.length,
+      date: new Date().toISOString(),
+      duration: totalTime - timeLeftRef.current,
+      completed: true,
     };
-    saveSession(s); addRecentIds(curQuestions.map(q => q.id));
+    saveToStorage(s); addRecentIds(curQuestions.map(q => q.id));
     const result = updateStats(s, allQs);
     setSession(s);
     const pct = Math.round((score / curQuestions.length) * 100);
     setCelebrationData({ pct, score, total: curQuestions.length, xp: result.xpGained });
     setShowCelebration(true);
     setPhase('result');
-  }, [subject, level]);
+  }, [subject, level, totalTime]);
 
-  // Submit with unanswered check: navigate to first unanswered if any
+  // Submit with unanswered check
   const trySubmit = useCallback(() => {
-    const unanswered = questionsRef.current.filter(q => answersRef.current[q.id] === undefined || answersRef.current[q.id] === null);
+    const unanswered = questionsRef.current.filter(
+      q => answersRef.current[q.id] === undefined || answersRef.current[q.id] === null
+    );
     if (unanswered.length > 0) {
       setUnansweredIds(unanswered.map(q => q.id));
       setShowUnansweredWarning(true);
-      // Navigate to first unanswered
       const idx = questionsRef.current.findIndex(q => q.id === unanswered[0].id);
       setCurrentIdx(idx);
       setTimeout(() => setShowUnansweredWarning(false), 4000);
@@ -128,26 +161,61 @@ export default function ExamPage() {
     const q = questions[currentIdx];
     answersRef.current = { ...answersRef.current, [q.id]: optionIdx };
     setAnswers(p => ({ ...p, [q.id]: optionIdx }));
-    // If this was the last unanswered, clear the warning list
     setUnansweredIds(prev => prev.filter(id => id !== q.id));
   }, [questions, currentIdx]);
 
-  const startExam = () => {
+  // Start a fresh exam
+  const startExam = (qs: Question[], tl: number, tt: number, existingAnswers = {}, existingFlagged = new Set<string>(), existingIdx = 0, existingTabWarnings = 0) => {
+    questionsRef.current = qs;
+    answersRef.current = existingAnswers as Record<string, number | null>;
+    timeLeftRef.current = tl;
+    tabWarningsRef.current = existingTabWarnings;
+    setQuestions(qs); setCurrentIdx(existingIdx);
+    setAnswers(existingAnswers as Record<string, number | null>);
+    setFlagged(existingFlagged);
+    setTimeLeft(tl); setTotalTime(tt);
+    setTabWarnings(existingTabWarnings);
+    setUnansweredIds([]); setShowTabWarning(false); setShowUnansweredWarning(false);
+    setPhase('quiz');
+    enterFullscreen();
+  };
+
+  const handleStartNew = () => {
     const n = Math.min(count, available);
     if (n === 0) return;
     const selected = selectQuestions(n, subject, level);
     if (!selected.length) return;
-    questionsRef.current = selected; answersRef.current = {};
-    setQuestions(selected); setCurrentIdx(0); setAnswers({}); setFlagged(new Set());
-    setTabWarnings(0); setShowTabWarning(false); setShowUnansweredWarning(false); setUnansweredIds([]);
-    setTimeLeft(selected.length * timePerQ); startTime.current = Date.now();
-    setPhase('quiz'); enterFullscreen();
+    clearSession('exam');
+    setHasResumable(false);
+    const tt = selected.length * timePerQ;
+    startExam(selected, tt, tt);
   };
 
+  const resumeSession = () => {
+    const saved = loadSession('exam');
+    if (!saved) return;
+    const correctedTime = correctTimerDrift(saved);
+    startExam(
+      saved.questions,
+      correctedTime,
+      saved.totalTime || saved.questions.length * 60,
+      saved.answers,
+      new Set(saved.flagged || []),
+      saved.currentIdx,
+      saved.tabWarnings || 0
+    );
+    setSubject(saved.subject);
+    setLevel(saved.level as any);
+    setHasResumable(false);
+  };
+
+  // Timer — uses ref to avoid stale closure
   useEffect(() => {
     if (phase !== 'quiz') return;
     timerRef.current = setInterval(() => {
-      setTimeLeft(p => { if (p <= 1) { finishExam(); return 0; } return p - 1; });
+      timeLeftRef.current = Math.max(0, timeLeftRef.current - 1);
+      setTimeLeft(timeLeftRef.current);
+      if (timeLeftRef.current <= 0) finishExam();
     }, 1000);
     return () => clearInterval(timerRef.current);
   }, [phase, finishExam]);
@@ -167,7 +235,6 @@ export default function ExamPage() {
   }, [phase, currentIdx, questions, selectAnswer, nextQuestion, prevQuestion, skipAndFlag]);
 
   const formatTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  const totalTime = questions.length * timePerQ;
   const timeProgress = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
 
   // ── SETUP ─────────────────────────────────────────────────────
@@ -178,6 +245,26 @@ export default function ExamPage() {
           <h1 className="text-2xl font-bold shimmer-text">Exam Mode</h1>
           <p className="text-muted-foreground mt-1">Timed assessment, no peeking at answers</p>
         </div>
+
+        {/* Resume banner */}
+        {hasResumable && (
+          <Card className="glass-card border-primary/40 animate-bounce-in">
+            <CardContent className="p-4 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <PlayCircle className="h-8 w-8 text-primary shrink-0" />
+                <div>
+                  <p className="font-semibold text-sm">Resume Exam Session</p>
+                  <p className="text-xs text-muted-foreground">Your exam was saved — continue from where you left off</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={resumeSession}>Resume</Button>
+                <Button size="sm" variant="ghost" onClick={() => { clearSession('exam'); setHasResumable(false); }}>Discard</Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="glass-card animate-scale-in" style={{ animationDelay: '80ms' }}>
           <CardContent className="p-6 space-y-5">
             <div>
@@ -235,8 +322,7 @@ export default function ExamPage() {
                 </button>
               </div>
               <input type="range" min={1} max={Math.max(1, available)} value={Math.min(count, available)}
-                onChange={e => setCount(Number(e.target.value))}
-                className="w-full accent-primary cursor-pointer" />
+                onChange={e => setCount(Number(e.target.value))} className="w-full accent-primary cursor-pointer" />
               <div className="flex justify-between text-xs text-muted-foreground mt-1"><span>1</span><span>{available}</span></div>
             </div>
             <div>
@@ -254,10 +340,10 @@ export default function ExamPage() {
             <div className="rounded-xl bg-muted/50 border border-border p-3 text-xs text-muted-foreground space-y-1">
               <p className="font-medium text-foreground">📋 Exam Rules</p>
               <p>• All questions must be answered before submitting</p>
-              <p>• Tab switching is monitored (exam continues)</p>
-              <p>• Fullscreen mode is enabled automatically</p>
+              <p>• Tab switching is monitored — exam continues running</p>
+              <p>• If you navigate away, your progress is auto-saved</p>
             </div>
-            <Button className="w-full gap-2" size="lg" onClick={startExam} disabled={available === 0}>
+            <Button className="w-full gap-2" size="lg" onClick={handleStartNew} disabled={available === 0}>
               <Timer className="h-4 w-4" />
               {available === 0 ? 'No questions available' : `Start Exam · ${Math.min(count, available)} Qs`}
               <Maximize2 className="h-3.5 w-3.5 opacity-60" />
@@ -274,11 +360,9 @@ export default function ExamPage() {
     return (
       <>
         {showCelebration && celebrationData && (
-          <ResultCelebration
-            pct={celebrationData.pct} score={celebrationData.score}
+          <ResultCelebration pct={celebrationData.pct} score={celebrationData.score}
             total={celebrationData.total} xpGained={celebrationData.xp}
-            onDone={() => setShowCelebration(false)}
-          />
+            onDone={() => setShowCelebration(false)} />
         )}
         <div className="max-w-lg mx-auto space-y-5">
           <Card className="glass-card animate-bounce-in">
@@ -341,22 +425,22 @@ export default function ExamPage() {
     <div className={isFullscreen ? 'fullscreen-quiz' : 'max-w-2xl mx-auto py-4'}>
       <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
 
-        {/* Tab-switch warning toast */}
+        {/* Tab-switch toast */}
         {showTabWarning && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-bounce-in">
             <div className="flex items-center gap-2 bg-warning text-warning-foreground px-5 py-3 rounded-2xl shadow-xl font-medium text-sm">
               <AlertTriangle className="h-4 w-4" />
-              Tab switch detected! ({tabWarnings} time{tabWarnings > 1 ? 's' : ''}) — exam continues
+              Tab switch #{tabWarnings} — exam continues, progress saved
             </div>
           </div>
         )}
 
-        {/* Unanswered warning toast */}
+        {/* Unanswered toast */}
         {showUnansweredWarning && (
           <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-bounce-in">
             <div className="flex items-center gap-2 bg-destructive text-destructive-foreground px-5 py-3 rounded-2xl shadow-xl font-medium text-sm">
               <Eye className="h-4 w-4" />
-              {unansweredIds.length} question{unansweredIds.length > 1 ? 's' : ''} unanswered — please answer all before submitting!
+              {unansweredIds.length} unanswered — please answer all before submitting!
             </div>
           </div>
         )}
@@ -365,7 +449,7 @@ export default function ExamPage() {
         <div className="flex items-center justify-between">
           <Badge variant="secondary">{q.subject} · {q.level}</Badge>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{answeredCount}/{questions.length} answered</span>
+            <span className="text-xs text-muted-foreground">{answeredCount}/{questions.length}</span>
             {flaggedCount > 0 && <span className="text-xs text-warning">· {flaggedCount} flagged</span>}
             {tabWarnings > 0 && <span className="text-xs text-warning flex items-center gap-0.5"><AlertTriangle className="h-3 w-3" />{tabWarnings}</span>}
             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-mono font-bold transition-all ${isLowTime ? 'bg-destructive/15 text-destructive animate-pulse' : 'bg-muted'}`}>
@@ -378,7 +462,7 @@ export default function ExamPage() {
           </div>
         </div>
 
-        {/* Dual progress */}
+        {/* Dual progress bars */}
         <div className="space-y-1">
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
@@ -388,7 +472,7 @@ export default function ExamPage() {
           </div>
         </div>
 
-        {/* Question grid */}
+        {/* Question number grid */}
         <div className="flex flex-wrap gap-1.5">
           {questions.map((qi, i) => {
             const isAnswered = answers[qi.id] !== undefined;
@@ -415,7 +499,7 @@ export default function ExamPage() {
           <CardContent className="p-6">
             {isUnanswered && (
               <div className="flex items-center gap-2 text-destructive text-xs mb-3 font-medium animate-fade-in">
-                <AlertTriangle className="h-3.5 w-3.5" /> This question must be answered before you can submit
+                <AlertTriangle className="h-3.5 w-3.5" /> Answer this question before submitting
               </div>
             )}
             <h2 className="text-lg font-semibold mb-6 leading-relaxed"><FormattedText text={q.question} /></h2>
@@ -456,7 +540,7 @@ export default function ExamPage() {
             </div>
           </CardContent>
         </Card>
-        <p className="text-xs text-center text-muted-foreground">1–{q.options.length} answer · ← prev · S skip · Enter next</p>
+        <p className="text-xs text-center text-muted-foreground">1–{q.options.length} · ← prev · S skip · Enter next · progress auto-saved every 5s</p>
       </div>
     </div>
   );

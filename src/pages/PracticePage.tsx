@@ -440,8 +440,8 @@ export default function PracticePage() {
 
         <Card className="glass-card">
           <CardContent className="p-6">
-            <h2 className="text-lg font-semibold mb-6 leading-relaxed animate-fade-in">
-              <FormattedText text={q.question} />
+             <h2 className="text-lg font-semibold mb-6 leading-relaxed animate-fade-in">
+              <FormattedText text={q.question} showRunButton />
             </h2>
             <div className="space-y-3">
               {q.options.map((opt, i) => {

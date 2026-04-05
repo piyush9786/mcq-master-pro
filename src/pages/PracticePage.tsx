@@ -92,7 +92,7 @@ export default function PracticePage() {
 
   // Resume a saved session
   const resumeSession = () => {
-    const saved = loadSession();
+    const saved = loadSession('practice');
     if (!saved || saved.type !== 'practice') return;
     setQuestions(saved.questions);
     setAnswers(saved.answers);

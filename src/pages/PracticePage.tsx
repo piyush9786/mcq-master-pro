@@ -55,7 +55,7 @@ export default function PracticePage() {
   useEffect(() => {
     setSubjects(getSubjects());
     // Check for resumable session
-    const saved = loadSession();
+    const saved = loadSession('practice');
     if (saved && saved.type === 'practice' && saved.phase === 'quiz') {
       setHasResumable(true);
     }
@@ -92,7 +92,7 @@ export default function PracticePage() {
 
   // Resume a saved session
   const resumeSession = () => {
-    const saved = loadSession();
+    const saved = loadSession('practice');
     if (!saved || saved.type !== 'practice') return;
     setQuestions(saved.questions);
     setAnswers(saved.answers);
@@ -110,7 +110,7 @@ export default function PracticePage() {
     if (n === 0) return;
     const selected = selectQuestions(n, subject, level);
     if (!selected.length) return;
-    clearSession();
+    clearSession('practice');
     setQuestions(selected); setCurrentIdx(0); setAnswers({}); setShowExplanation(false);
     setHasResumable(false);
     setPhase('quiz');
@@ -118,7 +118,7 @@ export default function PracticePage() {
   };
 
   const finishPractice = useCallback((qs: Question[], ans: Record<string, number | null>) => {
-    clearSession();
+    clearSession('practice');
     const score = qs.filter(q => ans[q.id] === q.answer).length;
     const s: TestSession = {
       id: crypto.randomUUID(), type: 'practice',
@@ -157,7 +157,7 @@ export default function PracticePage() {
   const retryWrong = () => {
     const wrong = questions.filter(q => answers[q.id] !== q.answer);
     if (!wrong.length) return;
-    clearSession();
+    clearSession('practice');
     setQuestions(wrong); setCurrentIdx(0); setAnswers({}); setShowExplanation(false);
     setPhase('quiz'); enterFullscreen();
   };
@@ -197,7 +197,7 @@ export default function PracticePage() {
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={resumeSession}>Resume</Button>
-                <Button size="sm" variant="ghost" onClick={() => { clearSession(); setHasResumable(false); }}>Discard</Button>
+                <Button size="sm" variant="ghost" onClick={() => { clearSession('practice'); setHasResumable(false); }}>Discard</Button>
               </div>
             </CardContent>
           </Card>

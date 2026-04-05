@@ -197,7 +197,7 @@ export default function PracticePage() {
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={resumeSession}>Resume</Button>
-                <Button size="sm" variant="ghost" onClick={() => { clearSession(); setHasResumable(false); }}>Discard</Button>
+                <Button size="sm" variant="ghost" onClick={() => { clearSession('practice'); setHasResumable(false); }}>Discard</Button>
               </div>
             </CardContent>
           </Card>

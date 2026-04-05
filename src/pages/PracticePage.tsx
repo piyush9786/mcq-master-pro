@@ -55,7 +55,7 @@ export default function PracticePage() {
   useEffect(() => {
     setSubjects(getSubjects());
     // Check for resumable session
-    const saved = loadSession();
+    const saved = loadSession('practice');
     if (saved && saved.type === 'practice' && saved.phase === 'quiz') {
       setHasResumable(true);
     }

@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, XCircle, ArrowRight, RotateCcw, BookOpen, List, ChevronDown, ChevronUp, Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
 import FormattedText from '@/components/FormattedText';
+import ResultCelebration from '@/components/ResultCelebration';
 
 type Phase = 'setup' | 'quiz' | 'result';
 
@@ -88,6 +89,8 @@ export default function PracticePage() {
   const [answers, setAnswers] = useState<Record<string, number | null>>({});
   const [showExplanation, setShowExplanation] = useState(false);
   const [session, setSession] = useState<TestSession | null>(null);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebData, setCelebData] = useState<{pct:number;score:number;total:number;xp:number}|null>(null);
   const [browserExpanded, setBrowserExpanded] = useState<string | null>(null);
   const [browserSubject, setBrowserSubject] = useState('all');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -366,6 +369,10 @@ export default function PracticePage() {
     }).filter(x => x.total > 0);
 
     return (
+      <>
+        {showCelebration && celebData && (
+          <ResultCelebration pct={celebData.pct} score={celebData.score} total={celebData.total} xpGained={celebData.xp} onDone={() => setShowCelebration(false)} />
+        )}
       <div className="max-w-2xl mx-auto space-y-5">
         <Card className="glass-card animate-bounce-in">
           <CardContent className="p-6">
@@ -463,6 +470,7 @@ export default function PracticePage() {
           })}
         </div>
       </div>
+      </>
     );
   }
 

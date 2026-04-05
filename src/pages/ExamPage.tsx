@@ -4,10 +4,10 @@ import { Question, TestSession, Difficulty } from '@/types/mcq';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { Timer, ArrowRight, ArrowLeft, SkipForward, CheckCircle2, XCircle, Maximize2, Minimize2, Minus, Plus } from 'lucide-react';
+import { Timer, ArrowRight, ArrowLeft, SkipForward, Maximize2, Minimize2, Minus, Plus, Eye, AlertTriangle } from 'lucide-react';
 import FormattedText from '@/components/FormattedText';
+import ResultCelebration from '@/components/ResultCelebration';
 
 type Phase = 'setup' | 'quiz' | 'result';
 
@@ -30,6 +30,12 @@ export default function ExamPage() {
   const [showReview, setShowReview] = useState(false);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [tabWarnings, setTabWarnings] = useState(0);
+  const [showTabWarning, setShowTabWarning] = useState(false);
+  const [showUnansweredWarning, setShowUnansweredWarning] = useState(false);
+  const [unansweredIds, setUnansweredIds] = useState<string[]>([]);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationData, setCelebrationData] = useState<{pct:number;score:number;total:number;xp:number}|null>(null);
   const startTime = useRef(0);
   const timerRef = useRef<NodeJS.Timeout>();
   const answersRef = useRef<Record<string, number | null>>({});
@@ -45,23 +51,31 @@ export default function ExamPage() {
     lvl, count: allQuestions.filter(q => (subject === 'all' || q.subject === subject) && q.level === lvl).length
   })).filter(x => x.count > 0);
 
-  // Fullscreen
-  const enterFullscreen = () => {
-    document.documentElement.requestFullscreen?.().catch(() => {});
-    setIsFullscreen(true);
-  };
-  const exitFullscreen = () => {
-    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-    setIsFullscreen(false);
-  };
+  // ── Fullscreen ────────────────────────────────────────────────
+  const enterFullscreen = () => { document.documentElement.requestFullscreen?.().catch(() => {}); setIsFullscreen(true); };
+  const exitFullscreen = () => { if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); setIsFullscreen(false); };
   useEffect(() => {
-    const onChange = () => { if (!document.fullscreenElement) setIsFullscreen(false); };
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
+    const fn = () => { if (!document.fullscreenElement) setIsFullscreen(false); };
+    document.addEventListener('fullscreenchange', fn);
+    return () => document.removeEventListener('fullscreenchange', fn);
   }, []);
   useEffect(() => { if (phase !== 'quiz' && isFullscreen) exitFullscreen(); }, [phase]);
 
-  // finishExam first (nextQuestion depends on it)
+  // ── Tab-switch detection: don't stop exam, just warn ─────────
+  useEffect(() => {
+    if (phase !== 'quiz') return;
+    const onVisible = () => {
+      if (document.hidden) {
+        setTabWarnings(w => w + 1);
+        setShowTabWarning(true);
+        setTimeout(() => setShowTabWarning(false), 3000);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [phase]);
+
+  // ── Core exam logic ───────────────────────────────────────────
   const finishExam = useCallback(() => {
     clearInterval(timerRef.current);
     const curAnswers = answersRef.current;
@@ -76,9 +90,29 @@ export default function ExamPage() {
       questionIds: curQuestions.map(q => q.id), answers: curAnswers,
       score, total: curQuestions.length, date: new Date().toISOString(), duration, completed: true,
     };
-    saveSession(s); addRecentIds(curQuestions.map(q => q.id)); updateStats(s, allQs);
-    setSession(s); setPhase('result');
+    saveSession(s); addRecentIds(curQuestions.map(q => q.id));
+    const result = updateStats(s, allQs);
+    setSession(s);
+    const pct = Math.round((score / curQuestions.length) * 100);
+    setCelebrationData({ pct, score, total: curQuestions.length, xp: result.xpGained });
+    setShowCelebration(true);
+    setPhase('result');
   }, [subject, level]);
+
+  // Submit with unanswered check: navigate to first unanswered if any
+  const trySubmit = useCallback(() => {
+    const unanswered = questionsRef.current.filter(q => answersRef.current[q.id] === undefined || answersRef.current[q.id] === null);
+    if (unanswered.length > 0) {
+      setUnansweredIds(unanswered.map(q => q.id));
+      setShowUnansweredWarning(true);
+      // Navigate to first unanswered
+      const idx = questionsRef.current.findIndex(q => q.id === unanswered[0].id);
+      setCurrentIdx(idx);
+      setTimeout(() => setShowUnansweredWarning(false), 4000);
+    } else {
+      finishExam();
+    }
+  }, [finishExam]);
 
   const prevQuestion = useCallback(() => { if (currentIdx > 0) setCurrentIdx(p => p - 1); }, [currentIdx]);
   const skipAndFlag = useCallback(() => {
@@ -88,21 +122,24 @@ export default function ExamPage() {
   }, [questions, currentIdx]);
   const nextQuestion = useCallback(() => {
     if (currentIdx < questions.length - 1) setCurrentIdx(p => p + 1);
-    else finishExam();
-  }, [currentIdx, questions.length, finishExam]);
+    else trySubmit();
+  }, [currentIdx, questions.length, trySubmit]);
   const selectAnswer = useCallback((optionIdx: number) => {
     const q = questions[currentIdx];
     answersRef.current = { ...answersRef.current, [q.id]: optionIdx };
     setAnswers(p => ({ ...p, [q.id]: optionIdx }));
+    // If this was the last unanswered, clear the warning list
+    setUnansweredIds(prev => prev.filter(id => id !== q.id));
   }, [questions, currentIdx]);
 
   const startExam = () => {
-    const effectiveCount = Math.min(count, available);
-    if (effectiveCount === 0) return;
-    const selected = selectQuestions(effectiveCount, subject, level);
+    const n = Math.min(count, available);
+    if (n === 0) return;
+    const selected = selectQuestions(n, subject, level);
     if (!selected.length) return;
     questionsRef.current = selected; answersRef.current = {};
     setQuestions(selected); setCurrentIdx(0); setAnswers({}); setFlagged(new Set());
+    setTabWarnings(0); setShowTabWarning(false); setShowUnansweredWarning(false); setUnansweredIds([]);
     setTimeLeft(selected.length * timePerQ); startTime.current = Date.now();
     setPhase('quiz'); enterFullscreen();
   };
@@ -124,7 +161,6 @@ export default function ExamPage() {
       if (e.key === 'Enter') nextQuestion();
       if (e.key === 'ArrowLeft') prevQuestion();
       if (e.key === 's' || e.key === 'S') skipAndFlag();
-      if (e.key === 'Escape') exitFullscreen();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -134,7 +170,7 @@ export default function ExamPage() {
   const totalTime = questions.length * timePerQ;
   const timeProgress = totalTime > 0 ? (timeLeft / totalTime) * 100 : 0;
 
-  // ── SETUP ────────────────────────────────────────────────────────────────
+  // ── SETUP ─────────────────────────────────────────────────────
   if (phase === 'setup') {
     return (
       <div className="max-w-lg mx-auto space-y-6">
@@ -154,7 +190,6 @@ export default function ExamPage() {
                 </SelectContent>
               </Select>
             </div>
-
             <div>
               <label className="text-sm font-medium mb-1.5 block">Difficulty</label>
               <Select value={level} onValueChange={v => { setLevel(v as any); setCount(Math.min(count, getAvailable(subject, v as any))); }}>
@@ -168,8 +203,6 @@ export default function ExamPage() {
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Level chips */}
             {levelCounts.length > 0 && (
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground font-medium">Available by level</p>
@@ -183,39 +216,31 @@ export default function ExamPage() {
                 </div>
               </div>
             )}
-
-            {/* Question count stepper */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium">Questions</label>
                 <span className="text-xs text-muted-foreground">{available} available</span>
               </div>
               <div className="flex items-center gap-3 mb-3">
-                <button onClick={() => setCount(c => Math.max(1, c - 5))}
-                  className="h-9 w-9 rounded-xl border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
-                  disabled={count <= 1}>
+                <button onClick={() => setCount(c => Math.max(1, c - 5))} disabled={count <= 1}
+                  className="h-9 w-9 rounded-xl border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40">
                   <Minus className="h-4 w-4" />
                 </button>
                 <div className="flex-1 text-center">
                   <span className="text-4xl font-bold tabular-nums">{Math.min(count, available || 1)}</span>
                 </div>
-                <button onClick={() => setCount(c => Math.min(available, c + 5))}
-                  className="h-9 w-9 rounded-xl border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40"
-                  disabled={count >= available}>
+                <button onClick={() => setCount(c => Math.min(available, c + 5))} disabled={count >= available}
+                  className="h-9 w-9 rounded-xl border flex items-center justify-center hover:bg-muted transition-colors disabled:opacity-40">
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
               <input type="range" min={1} max={Math.max(1, available)} value={Math.min(count, available)}
                 onChange={e => setCount(Number(e.target.value))}
                 className="w-full accent-primary cursor-pointer" />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                <span>1</span><span>{available}</span>
-              </div>
+              <div className="flex justify-between text-xs text-muted-foreground mt-1"><span>1</span><span>{available}</span></div>
             </div>
-
-            {/* Time per question */}
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Time per Question</label>
+              <label className="text-sm font-medium mb-2 block">Time per Question</label>
               <div className="grid grid-cols-5 gap-1.5">
                 {[30, 45, 60, 90, 120].map(t => (
                   <button key={t} onClick={() => setTimePerQ(t)}
@@ -224,96 +249,127 @@ export default function ExamPage() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground mt-2 text-center">
-                Total time: {formatTime(Math.min(count, available) * timePerQ)}
-              </p>
+              <p className="text-xs text-muted-foreground mt-2 text-center">Total: {formatTime(Math.min(count, available) * timePerQ)}</p>
             </div>
-
+            <div className="rounded-xl bg-muted/50 border border-border p-3 text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">📋 Exam Rules</p>
+              <p>• All questions must be answered before submitting</p>
+              <p>• Tab switching is monitored (exam continues)</p>
+              <p>• Fullscreen mode is enabled automatically</p>
+            </div>
             <Button className="w-full gap-2" size="lg" onClick={startExam} disabled={available === 0}>
               <Timer className="h-4 w-4" />
               {available === 0 ? 'No questions available' : `Start Exam · ${Math.min(count, available)} Qs`}
               <Maximize2 className="h-3.5 w-3.5 opacity-60" />
             </Button>
-            <p className="text-center text-xs text-muted-foreground">Will open in fullscreen</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  // ── RESULT ────────────────────────────────────────────────────────────────
+  // ── RESULT ────────────────────────────────────────────────────
   if (phase === 'result' && session) {
     const pct = Math.round((session.score / session.total) * 100);
     return (
-      <div className="max-w-lg mx-auto space-y-5">
-        <Card className="glass-card animate-bounce-in">
-          <CardContent className="p-8 text-center space-y-4">
-            <div className="text-6xl font-bold" style={{ color: pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444' }}>{pct}%</div>
-            <p className="text-muted-foreground">{session.score} of {session.total} correct</p>
-            <p className="text-sm text-muted-foreground">Time: {formatTime(session.duration)}</p>
-            <div className="h-3 bg-muted rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-primary to-accent animate-progress-fill"
-                style={{ width: `${pct}%` }} />
-            </div>
-            <div className="flex gap-4 justify-center pt-2">
-              <Button variant="outline" onClick={() => setShowReview(!showReview)}>
-                {showReview ? 'Hide Review' : 'Review Answers'}
-              </Button>
-              <Button onClick={() => setPhase('setup')}>New Exam</Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {showReview && (
-          <div className="space-y-3">
-            {questions.map((q, i) => {
-              const userAns = answers[q.id];
-              const correct = userAns === q.answer;
-              return (
-                <Card key={q.id} className={`glass-card border-l-4 animate-fade-in ${correct ? 'border-l-success' : 'border-l-destructive'}`}
-                  style={{ animationDelay: `${i * 40}ms` }}>
-                  <CardContent className="p-4">
-                    <p className="font-medium text-sm mb-2">{i + 1}. <FormattedText text={q.question} /></p>
-                    <div className="space-y-1 text-sm">
-                      {q.options.map((opt, oi) => (
-                        <div key={oi} className={`px-2 py-1 rounded ${oi === q.answer ? 'bg-success/10 text-success font-medium' : oi === userAns && oi !== q.answer ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground'}`}>
-                          <FormattedText text={opt} />
-                        </div>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2 italic"><FormattedText text={q.explanation} /></p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+      <>
+        {showCelebration && celebrationData && (
+          <ResultCelebration
+            pct={celebrationData.pct} score={celebrationData.score}
+            total={celebrationData.total} xpGained={celebrationData.xp}
+            onDone={() => setShowCelebration(false)}
+          />
         )}
-      </div>
+        <div className="max-w-lg mx-auto space-y-5">
+          <Card className="glass-card animate-bounce-in">
+            <CardContent className="p-8 text-center space-y-4">
+              <div className="text-6xl font-bold" style={{ color: pct >= 80 ? '#22c55e' : pct >= 50 ? '#f59e0b' : '#ef4444' }}>{pct}%</div>
+              <p className="text-muted-foreground">{session.score} of {session.total} correct</p>
+              <p className="text-sm text-muted-foreground">Time: {formatTime(session.duration)}</p>
+              {tabWarnings > 0 && (
+                <p className="text-xs text-warning flex items-center justify-center gap-1">
+                  <AlertTriangle className="h-3.5 w-3.5" /> {tabWarnings} tab switch{tabWarnings > 1 ? 'es' : ''} detected
+                </p>
+              )}
+              <div className="h-3 bg-muted rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-primary to-accent animate-progress-fill" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="flex gap-4 justify-center pt-2">
+                <Button variant="outline" onClick={() => setShowReview(!showReview)}>{showReview ? 'Hide Review' : 'Review Answers'}</Button>
+                <Button onClick={() => setPhase('setup')}>New Exam</Button>
+              </div>
+            </CardContent>
+          </Card>
+          {showReview && (
+            <div className="space-y-3">
+              {questions.map((q, i) => {
+                const userAns = answers[q.id];
+                const correct = userAns === q.answer;
+                return (
+                  <Card key={q.id} className={`glass-card border-l-4 animate-fade-in ${correct ? 'border-l-success' : 'border-l-destructive'}`}
+                    style={{ animationDelay: `${i * 40}ms` }}>
+                    <CardContent className="p-4">
+                      <p className="font-medium text-sm mb-2">{i + 1}. <FormattedText text={q.question} /></p>
+                      <div className="space-y-1 text-sm">
+                        {q.options.map((opt, oi) => (
+                          <div key={oi} className={`px-2 py-1 rounded ${oi === q.answer ? 'bg-success/10 text-success font-medium' : oi === userAns && oi !== q.answer ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground'}`}>
+                            <FormattedText text={opt} />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2 italic"><FormattedText text={q.explanation} /></p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </>
     );
   }
 
-  // ── QUIZ (fullscreen) ─────────────────────────────────────────────────────
+  // ── QUIZ ──────────────────────────────────────────────────────
   const q = questions[currentIdx];
   const progress = ((currentIdx + 1) / questions.length) * 100;
   const answeredCount = Object.keys(answers).length;
   const flaggedCount = flagged.size;
   const isLowTime = timeLeft < 30;
+  const isUnanswered = unansweredIds.includes(q?.id);
 
   return (
     <div className={isFullscreen ? 'fullscreen-quiz' : 'max-w-2xl mx-auto py-4'}>
       <div className="max-w-2xl mx-auto space-y-4 animate-fade-in">
+
+        {/* Tab-switch warning toast */}
+        {showTabWarning && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-bounce-in">
+            <div className="flex items-center gap-2 bg-warning text-warning-foreground px-5 py-3 rounded-2xl shadow-xl font-medium text-sm">
+              <AlertTriangle className="h-4 w-4" />
+              Tab switch detected! ({tabWarnings} time{tabWarnings > 1 ? 's' : ''}) — exam continues
+            </div>
+          </div>
+        )}
+
+        {/* Unanswered warning toast */}
+        {showUnansweredWarning && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-bounce-in">
+            <div className="flex items-center gap-2 bg-destructive text-destructive-foreground px-5 py-3 rounded-2xl shadow-xl font-medium text-sm">
+              <Eye className="h-4 w-4" />
+              {unansweredIds.length} question{unansweredIds.length > 1 ? 's' : ''} unanswered — please answer all before submitting!
+            </div>
+          </div>
+        )}
+
         {/* Top bar */}
         <div className="flex items-center justify-between">
           <Badge variant="secondary">{q.subject} · {q.level}</Badge>
-          <div className="flex items-center gap-3">
-            <div className="text-xs text-muted-foreground">
-              {answeredCount}/{questions.length} answered
-              {flaggedCount > 0 && <span className="text-warning ml-2">· {flaggedCount} flagged</span>}
-            </div>
-            {/* Timer */}
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full ${isLowTime ? 'bg-destructive/10 text-destructive animate-pulse' : 'bg-muted text-foreground'}`}>
-              <Timer className="h-3.5 w-3.5" />
-              <span className="text-sm font-mono font-bold">{formatTime(timeLeft)}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{answeredCount}/{questions.length} answered</span>
+            {flaggedCount > 0 && <span className="text-xs text-warning">· {flaggedCount} flagged</span>}
+            {tabWarnings > 0 && <span className="text-xs text-warning flex items-center gap-0.5"><AlertTriangle className="h-3 w-3" />{tabWarnings}</span>}
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-mono font-bold transition-all ${isLowTime ? 'bg-destructive/15 text-destructive animate-pulse' : 'bg-muted'}`}>
+              <Timer className="h-3.5 w-3.5" />{formatTime(timeLeft)}
             </div>
             <button onClick={isFullscreen ? exitFullscreen : enterFullscreen}
               className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors">
@@ -322,28 +378,28 @@ export default function ExamPage() {
           </div>
         </div>
 
-        {/* Dual progress: questions + timer */}
+        {/* Dual progress */}
         <div className="space-y-1">
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }} />
+            <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
           <div className="h-1 bg-muted rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-1000 ${isLowTime ? 'bg-destructive' : 'bg-warning/70'}`}
-              style={{ width: `${timeProgress}%` }} />
+            <div className={`h-full rounded-full transition-all duration-1000 ${isLowTime ? 'bg-destructive' : 'bg-warning/60'}`} style={{ width: `${timeProgress}%` }} />
           </div>
         </div>
 
-        {/* Question number grid */}
+        {/* Question grid */}
         <div className="flex flex-wrap gap-1.5">
           {questions.map((qi, i) => {
             const isAnswered = answers[qi.id] !== undefined;
             const isFlagged = flagged.has(qi.id);
             const isCurrent = i === currentIdx;
+            const isUnans = unansweredIds.includes(qi.id);
             return (
               <button key={qi.id} onClick={() => setCurrentIdx(i)}
                 className={`h-7 w-7 rounded-lg text-xs font-medium transition-all border ${
                   isCurrent ? 'border-primary bg-primary text-primary-foreground scale-110 shadow' :
+                  isUnans ? 'border-destructive bg-destructive/15 text-destructive animate-pulse' :
                   isFlagged ? 'border-warning bg-warning/10 text-warning' :
                   isAnswered ? 'border-success/50 bg-success/10 text-success' :
                   'border-border text-muted-foreground hover:border-primary'
@@ -355,8 +411,13 @@ export default function ExamPage() {
         </div>
 
         {/* Question card */}
-        <Card className="glass-card">
+        <Card className={`glass-card transition-all ${isUnanswered ? 'ring-2 ring-destructive/50' : ''}`}>
           <CardContent className="p-6">
+            {isUnanswered && (
+              <div className="flex items-center gap-2 text-destructive text-xs mb-3 font-medium animate-fade-in">
+                <AlertTriangle className="h-3.5 w-3.5" /> This question must be answered before you can submit
+              </div>
+            )}
             <h2 className="text-lg font-semibold mb-6 leading-relaxed"><FormattedText text={q.question} /></h2>
             <div className="space-y-3">
               {q.options.map((opt, i) => {
@@ -384,7 +445,10 @@ export default function ExamPage() {
                 </Button>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={finishExam}>Submit</Button>
+                <Button variant="outline" size="sm" onClick={trySubmit}
+                  className={unansweredIds.length > 0 ? 'border-destructive/50 text-destructive' : ''}>
+                  {unansweredIds.length > 0 ? `Submit (${unansweredIds.length} left)` : 'Submit ✓'}
+                </Button>
                 <Button size="sm" onClick={nextQuestion}>
                   {currentIdx < questions.length - 1 ? <>Next <ArrowRight className="h-4 w-4 ml-1" /></> : 'Finish 🎉'}
                 </Button>
@@ -392,7 +456,7 @@ export default function ExamPage() {
             </div>
           </CardContent>
         </Card>
-        <p className="text-xs text-center text-muted-foreground">1–{q.options.length} answer · ← prev · S skip · Enter next · Esc exit</p>
+        <p className="text-xs text-center text-muted-foreground">1–{q.options.length} answer · ← prev · S skip · Enter next</p>
       </div>
     </div>
   );

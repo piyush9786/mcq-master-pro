@@ -274,3 +274,19 @@ export function seedDemoData() {
   ];
   setQuestions(demoQuestions);
 }
+
+// User profile
+export interface UserProfile {
+  name: string;
+  createdAt: string;
+}
+const PROFILE_KEY = 'mcqpro_profile';
+export function getUserProfile(): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+export function setUserProfile(profile: UserProfile) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}

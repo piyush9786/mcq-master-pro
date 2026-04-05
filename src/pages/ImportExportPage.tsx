@@ -161,7 +161,7 @@ export default function ImportExportPage() {
   };
 
   const copySample = () => {
-    navigator.clipboard.writeText(FULL_SAMPLE);
+    navigator.clipboard.writeText(FULL_COPY_TEMPLATE);
     setCopiedSample(true);
     toast({ title: 'Sample JSON copied!' });
     setTimeout(() => setCopiedSample(false), 2000);

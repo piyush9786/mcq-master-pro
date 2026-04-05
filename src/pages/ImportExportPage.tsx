@@ -168,7 +168,7 @@ export default function ImportExportPage() {
   };
 
   const loadSample = () => {
-    setJsonInput(FULL_SAMPLE);
+    setJsonInput(FULL_SAMPLE_JSON);
     toast({ title: 'Sample loaded in editor', description: 'Click Import to add these 3 demo questions.' });
   };
 

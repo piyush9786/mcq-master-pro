@@ -38,7 +38,68 @@ const SAMPLE_QUESTIONS = [
   }
 ];
 
-const FULL_SAMPLE = JSON.stringify({ version: "1.0", name: "My Question Bank", questions: SAMPLE_QUESTIONS }, null, 2);
+const FULL_SAMPLE_JSON = JSON.stringify({ version: "1.0", name: "My Question Bank", questions: SAMPLE_QUESTIONS }, null, 2);
+
+const FULL_COPY_TEMPLATE = `/*
+ ╔══════════════════════════════════════════════════════════╗
+ ║           MCQ Pro — Question Bank Format Guide          ║
+ ╠══════════════════════════════════════════════════════════╣
+ ║                                                          ║
+ ║  REQUIRED FIELDS:                                        ║
+ ║  ─────────────────                                       ║
+ ║  id          (string)   Unique ID. Duplicates renamed.   ║
+ ║  subject     (string)   e.g. "Math", "Java", "History"   ║
+ ║  level       (enum)     easy | medium | hard | expert     ║
+ ║                         Aliases: beginner→easy,           ║
+ ║                         intermediate→medium,              ║
+ ║                         advanced→hard, master→expert      ║
+ ║  question    (string)   The question text                 ║
+ ║  options     (string[]) 2–6 answer choices                ║
+ ║  answer      (number)   Zero-based index of correct one   ║
+ ║  explanation (string)   Shown after answering             ║
+ ║                                                          ║
+ ║  FORMATTING SUPPORT (question, options, explanation):     ║
+ ║  ─────────────────────────────────────────────────────    ║
+ ║  Inline code:   \`typeof null\`                            ║
+ ║  Code block:    \`\`\`java\\ncode here\\n\`\`\`                    ║
+ ║  LaTeX math:    $\\\\frac{1}{3}$                            ║
+ ║                                                          ║
+ ╚══════════════════════════════════════════════════════════╝
+*/
+
+${JSON.stringify({
+  version: "1.0",
+  name: "My Question Bank",
+  questions: [
+    {
+      id: "js_001",
+      subject: "JavaScript",
+      level: "easy",
+      question: "What is the output of \`typeof null\`?",
+      options: ["\"null\"", "\"object\"", "\"undefined\"", "\"number\""],
+      answer: 1,
+      explanation: "Due to a historical bug, \`typeof null\` returns \\\"object\\\" in JavaScript."
+    },
+    {
+      id: "math_001",
+      subject: "Mathematics",
+      level: "medium",
+      question: "What is the value of $\\\\int_0^1 x^2 \\\\, dx$?",
+      options: ["$\\\\frac{1}{2}$", "$\\\\frac{1}{3}$", "$\\\\frac{1}{4}$", "$1$"],
+      answer: 1,
+      explanation: "Using the power rule: $\\\\frac{x^3}{3}\\\\Big|_0^1 = \\\\frac{1}{3}$"
+    },
+    {
+      id: "py_001",
+      subject: "Python",
+      level: "hard",
+      question: "What does this code output?\\n\`\`\`python\\nx = [1, 2, 3]\\nprint(x[::-1])\\n\`\`\`",
+      options: ["[3, 2, 1]", "[1, 2, 3]", "Error", "None"],
+      answer: 0,
+      explanation: "The \`[::-1]\` slice reverses the list, giving \`[3, 2, 1]\`."
+    }
+  ]
+}, null, 2)}`;
 
 const FIELD_DOCS = [
   { field: 'id', type: 'string', required: true, note: 'Unique identifier. Duplicates are auto-renamed on import.' },

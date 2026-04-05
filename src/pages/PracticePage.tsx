@@ -110,7 +110,7 @@ export default function PracticePage() {
     if (n === 0) return;
     const selected = selectQuestions(n, subject, level);
     if (!selected.length) return;
-    clearSession();
+    clearSession('practice');
     setQuestions(selected); setCurrentIdx(0); setAnswers({}); setShowExplanation(false);
     setHasResumable(false);
     setPhase('quiz');

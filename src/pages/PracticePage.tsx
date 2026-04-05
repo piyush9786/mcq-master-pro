@@ -118,7 +118,7 @@ export default function PracticePage() {
   };
 
   const finishPractice = useCallback((qs: Question[], ans: Record<string, number | null>) => {
-    clearSession();
+    clearSession('practice');
     const score = qs.filter(q => ans[q.id] === q.answer).length;
     const s: TestSession = {
       id: crypto.randomUUID(), type: 'practice',

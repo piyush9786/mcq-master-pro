@@ -124,6 +124,28 @@ export default function ImportExportPage() {
 
   const subjects = getSubjects();
 
+  const handleCreateSubject = () => {
+    const name = newSubject.trim();
+    if (!name) return;
+    if (subjects.includes(name)) {
+      toast({ title: 'Subject already exists', variant: 'destructive' });
+      return;
+    }
+    // Create a placeholder question to register the subject
+    const placeholderQ = {
+      id: 'placeholder_' + Date.now().toString(36),
+      subject: name,
+      level: 'easy' as const,
+      question: `[Placeholder] — import questions into "${name}" using the subject override below.`,
+      options: ['—', '—'],
+      answer: 0,
+      explanation: 'This is a placeholder. Delete it after importing real questions.',
+    };
+    addQuestions([placeholderQ]);
+    setNewSubject('');
+    toast({ title: `✅ Subject "${name}" created!` });
+  };
+
   const handleImport = () => {
     try {
       const data = JSON.parse(jsonInput);
@@ -135,7 +157,12 @@ export default function ImportExportPage() {
         setImportResult(null);
         return;
       }
-      const { added, autoRenamed } = addQuestions(result.questions);
+      // Apply subject override if set
+      let questionsToImport = result.questions;
+      if (overrideSubject.trim()) {
+        questionsToImport = questionsToImport.map(q => ({ ...q, subject: overrideSubject.trim() }));
+      }
+      const { added, autoRenamed } = addQuestions(questionsToImport);
       setImportResult({ added, autoRenamed });
       setErrors(infoMsgs);
       toast({ title: `✅ Imported ${added} questions!`, description: autoRenamed > 0 ? `${autoRenamed} IDs auto-reassigned.` : undefined });

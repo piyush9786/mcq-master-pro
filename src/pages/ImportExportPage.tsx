@@ -119,6 +119,8 @@ export default function ImportExportPage() {
   const [exportSubject, setExportSubject] = useState('all');
   const [showDocs, setShowDocs] = useState(false);
   const [copiedSample, setCopiedSample] = useState(false);
+  const [newSubject, setNewSubject] = useState('');
+  const [overrideSubject, setOverrideSubject] = useState('');
 
   const subjects = getSubjects();
 

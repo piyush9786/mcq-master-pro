@@ -29,6 +29,7 @@ const App = () => (
             <Route path="/wrong-questions" element={<WrongQuestionsPage />} />
             <Route path="/subjects" element={<SubjectsPage />} />
             <Route path="/import-export" element={<ImportExportPage />} />
+            <Route path="/test-papers" element={<TestPapersPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AppLayout>

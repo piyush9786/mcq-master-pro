@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { addQuestions, exportQuestionBank, validateQuestionBank, getSubjects, getQuestions } from '@/lib/storage';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Download, CheckCircle2, AlertCircle, Copy, RefreshCw, FileJson, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, Download, CheckCircle2, AlertCircle, Copy, RefreshCw, FileJson, Info, ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const SAMPLE_QUESTIONS = [
@@ -119,8 +120,32 @@ export default function ImportExportPage() {
   const [exportSubject, setExportSubject] = useState('all');
   const [showDocs, setShowDocs] = useState(false);
   const [copiedSample, setCopiedSample] = useState(false);
+  const [newSubject, setNewSubject] = useState('');
+  const [overrideSubject, setOverrideSubject] = useState('');
 
   const subjects = getSubjects();
+
+  const handleCreateSubject = () => {
+    const name = newSubject.trim();
+    if (!name) return;
+    if (subjects.includes(name)) {
+      toast({ title: 'Subject already exists', variant: 'destructive' });
+      return;
+    }
+    // Create a placeholder question to register the subject
+    const placeholderQ = {
+      id: 'placeholder_' + Date.now().toString(36),
+      subject: name,
+      level: 'easy' as const,
+      question: `[Placeholder] — import questions into "${name}" using the subject override below.`,
+      options: ['—', '—'],
+      answer: 0,
+      explanation: 'This is a placeholder. Delete it after importing real questions.',
+    };
+    addQuestions([placeholderQ]);
+    setNewSubject('');
+    toast({ title: `✅ Subject "${name}" created!` });
+  };
 
   const handleImport = () => {
     try {
@@ -133,7 +158,12 @@ export default function ImportExportPage() {
         setImportResult(null);
         return;
       }
-      const { added, autoRenamed } = addQuestions(result.questions);
+      // Apply subject override if set
+      let questionsToImport = result.questions;
+      if (overrideSubject.trim()) {
+        questionsToImport = questionsToImport.map(q => ({ ...q, subject: overrideSubject.trim() }));
+      }
+      const { added, autoRenamed } = addQuestions(questionsToImport);
       setImportResult({ added, autoRenamed });
       setErrors(infoMsgs);
       toast({ title: `✅ Imported ${added} questions!`, description: autoRenamed > 0 ? `${autoRenamed} IDs auto-reassigned.` : undefined });
@@ -240,6 +270,27 @@ export default function ImportExportPage() {
         </CardContent>
       </Card>
 
+      {/* ── Create Subject ──────────────────────────────────────── */}
+      <Card className="glass-card animate-scale-in" style={{ animationDelay: '90ms' }}>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2"><Plus className="h-4 w-4" /> Create Subject / Folder</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input placeholder="New subject name..." value={newSubject} onChange={e => setNewSubject(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateSubject()} className="text-sm" />
+            <Button onClick={handleCreateSubject} disabled={!newSubject.trim()} size="sm">Create</Button>
+          </div>
+          {subjects.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {subjects.map(s => (
+                <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Import ──────────────────────────────────────────────── */}
         <Card className="glass-card animate-scale-in" style={{ animationDelay: '120ms' }}>
@@ -250,6 +301,19 @@ export default function ImportExportPage() {
             <div className="flex items-start gap-3 p-3 rounded-xl bg-primary/5 border border-primary/15 text-xs">
               <RefreshCw className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
               <p className="text-muted-foreground">Duplicate IDs are <span className="text-foreground font-medium">automatically reassigned</span> — no questions are ever lost.</p>
+            </div>
+            {/* Subject override */}
+            <div>
+              <label className="text-xs font-medium mb-1 block text-muted-foreground">Override subject for all imported questions (optional)</label>
+              <Select value={overrideSubject} onValueChange={setOverrideSubject}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="Auto-detect from JSON" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Auto-detect from JSON</SelectItem>
+                  {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <input type="file" accept=".json" onChange={handleFileUpload}
               className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground file:text-sm file:font-medium file:cursor-pointer cursor-pointer" />

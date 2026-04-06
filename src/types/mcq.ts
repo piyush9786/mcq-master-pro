@@ -61,3 +61,47 @@ export const questionSchema = {
   minOptions: 2,
   maxOptions: 6,
 };
+
+// Test Paper types (no difficulty levels)
+export interface TestQuestion {
+  id: string;
+  question: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+  bookmarked?: boolean;
+}
+
+export interface TestPaper {
+  id: string;
+  title: string;
+  description?: string;
+  timeLimit?: number; // seconds, optional
+  questions: TestQuestion[];
+  createdAt: string;
+}
+
+export interface TestPaperSession {
+  id: string;
+  paperId: string;
+  questionIds: string[];
+  answers: Record<string, number | null>;
+  score: number;
+  total: number;
+  date: string;
+  duration: number;
+  completed: boolean;
+}
+
+export interface TestPaperBank {
+  version: string;
+  name: string;
+  papers: TestPaper[];
+  exportedAt: string;
+}
+
+export const testQuestionSchema = {
+  required: ['id', 'question', 'options', 'answer', 'explanation'],
+  minOptions: 2,
+  maxOptions: 6,
+};

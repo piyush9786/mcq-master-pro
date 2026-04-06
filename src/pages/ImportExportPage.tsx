@@ -270,6 +270,27 @@ export default function ImportExportPage() {
         </CardContent>
       </Card>
 
+      {/* ── Create Subject ──────────────────────────────────────── */}
+      <Card className="glass-card animate-scale-in" style={{ animationDelay: '90ms' }}>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2"><Plus className="h-4 w-4" /> Create Subject / Folder</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Input placeholder="New subject name..." value={newSubject} onChange={e => setNewSubject(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreateSubject()} className="text-sm" />
+            <Button onClick={handleCreateSubject} disabled={!newSubject.trim()} size="sm">Create</Button>
+          </div>
+          {subjects.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {subjects.map(s => (
+                <Badge key={s} variant="secondary" className="text-xs">{s}</Badge>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ── Import ──────────────────────────────────────────────── */}
         <Card className="glass-card animate-scale-in" style={{ animationDelay: '120ms' }}>
@@ -280,6 +301,19 @@ export default function ImportExportPage() {
             <div className="flex items-start gap-3 p-3 rounded-xl bg-primary/5 border border-primary/15 text-xs">
               <RefreshCw className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
               <p className="text-muted-foreground">Duplicate IDs are <span className="text-foreground font-medium">automatically reassigned</span> — no questions are ever lost.</p>
+            </div>
+            {/* Subject override */}
+            <div>
+              <label className="text-xs font-medium mb-1 block text-muted-foreground">Override subject for all imported questions (optional)</label>
+              <Select value={overrideSubject} onValueChange={setOverrideSubject}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder="Auto-detect from JSON" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Auto-detect from JSON</SelectItem>
+                  {subjects.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <input type="file" accept=".json" onChange={handleFileUpload}
               className="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-primary-foreground file:text-sm file:font-medium file:cursor-pointer cursor-pointer" />

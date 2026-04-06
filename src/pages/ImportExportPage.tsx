@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Download, CheckCircle2, AlertCircle, Copy, RefreshCw, FileJson, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Upload, Download, CheckCircle2, AlertCircle, Copy, RefreshCw, FileJson, Info, ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const SAMPLE_QUESTIONS = [

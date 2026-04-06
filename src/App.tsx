@@ -10,6 +10,7 @@ import ResultsPage from "./pages/ResultsPage";
 import WrongQuestionsPage from "./pages/WrongQuestionsPage";
 import ImportExportPage from "./pages/ImportExportPage";
 import SubjectsPage from "./pages/SubjectsPage";
+import TestPapersPage from "./pages/TestPapersPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();

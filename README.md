@@ -12,7 +12,6 @@
 [![Deployed on Netlify](https://img.shields.io/badge/Deployed_on-Netlify-00C7B7?style=for-the-badge&logo=netlify)](https://netlify.com)
 
 </div>
-
 ---
 
 ## 💡 Project Idea & Origin
